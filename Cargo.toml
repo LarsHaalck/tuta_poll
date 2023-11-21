@@ -1,0 +1,24 @@
+[package]
+name = "tuta_poll"
+version = "0.1.0"
+description = "tuta poll library to fetch new mails and possibly relay them"
+edition = "2021"
+repository = "https://github.com/LarsHaalck/tuta_poll"
+
+[dependencies]
+aes = "0.8.3"
+anyhow = "1.0.75"
+base64 = "0.21.5"
+cbc = {version = "0.1.2", features = ["std"] }
+envy = "0.4.2"
+hmac = "0.12.1"
+lz4_flex = "0.11.1"
+reqwest = { version = "0.11.22", features = ["blocking", "json"] }
+serde = { version = "1.0.193", features = ["derive"] }
+serde_json = "1.0.108"
+sha2 = "0.10.8"
+toml = "0.8.8"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+url = "2.4.1"
+bcrypt = "0.15.0"

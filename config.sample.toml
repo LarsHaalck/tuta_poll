@@ -1,0 +1,9 @@
+[account]
+email_address = ""
+password = ""
+
+[display]
+email = true
+name = true
+subject = true
+body = true
