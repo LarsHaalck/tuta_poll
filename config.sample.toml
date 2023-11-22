@@ -1,6 +1,7 @@
 [account]
 email_address = ""
 password = ""
+watch_spam = true
 
 [display]
 email = true

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use serde::Deserialize;
-use tracing::debug;
 use super::serialize::*;
 use anyhow::Error;
 
@@ -22,10 +21,7 @@ pub fn fetch(email_address: &str) -> Result<Vec<u8>> {
         .join("/rest/sys/saltservice")?;
     url.set_query(Some(&payload));
 
-    debug!("request url: {:?}", url.as_str());
     let response = reqwest::blocking::get(url)?.json::<Response>()?;
-    debug!("response: {:?}", response);
-
     let salt = response.salt;
     if salt.len() == 16 {
         Ok(salt)

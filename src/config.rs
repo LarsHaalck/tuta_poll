@@ -12,6 +12,8 @@ pub struct Config {
 pub struct Account {
     pub email_address: String,
     pub password: String,
+    #[serde(default)]
+    pub watch_spam: bool,
 }
 
 #[derive(Deserialize, Debug)]

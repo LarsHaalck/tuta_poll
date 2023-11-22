@@ -3,7 +3,6 @@ use anyhow::Result;
 use base64::{engine::general_purpose as engines, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
-use tracing::debug;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,13 +43,10 @@ pub fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session>
         user: (),
     })?;
 
-    debug!("payload: {:?}", payload);
-
     let url = url::Url::parse(super::BASE_URL)?
         .join("/rest/sys/sessionservice")?;
 
     let client = reqwest::blocking::Client::new();
     let response = client.post(url).body(payload).send()?.json::<Session>()?;
-    debug!("response: {:?}", response);
     Ok(response)
 }

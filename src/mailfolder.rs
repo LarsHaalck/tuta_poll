@@ -2,22 +2,23 @@ use super::serialize::*;
 use anyhow::Result;
 use serde::Deserialize;
 
-// export enum MailFolderType {
-// 	CUSTOM = "0",
-// 	INBOX = "1",
-// 	SENT = "2",
-// 	TRASH = "3",
-// 	ARCHIVE = "4",
-// 	SPAM = "5",
-// 	DRAFT = "6",
-// }
+#[derive(Debug, Deserialize, PartialEq)]
+pub enum MailFolderType {
+    Custom,
+    Inbox,
+    Sent,
+    Trash,
+    Archive,
+    Spam,
+    Draft,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct Folder {
     #[serde(with = "serde_format")]
     _format: (),
-    #[serde(rename = "folderType")]
-    pub folder_type: String,
+    #[serde(with = "serde_mail_folder_type", rename = "folderType")]
+    pub folder_type: MailFolderType,
     #[serde(rename = "_id")]
     pub id: (String, String),
     pub mails: String,

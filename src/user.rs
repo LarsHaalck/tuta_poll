@@ -2,26 +2,28 @@ use super::serialize::*;
 use anyhow::Result;
 use serde::Deserialize;
 
-// export enum GroupType {
-// 	User = "0",
-// 	Admin = "1",
-// 	MailingList = "2",
-// 	Customer = "3",
-// 	External = "4",
-// 	Mail = "5",
-// 	Contact = "6",
-// 	File = "7",
-// 	LocalAdmin = "8",
-// 	Calendar = "9",
-// 	Template = "10",
-// 	ContactList = "11",
-// }
+#[derive(Debug, PartialEq)]
+pub enum GroupType {
+	User,
+	Admin,
+	MailingList,
+	Customer,
+	External,
+	Mail,
+	Contact,
+	File,
+	LocalAdmin,
+	Calendar,
+	Template,
+	ContactList,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Membership {
     pub group: String,
-    pub group_type: String,
+    #[serde(with = "serde_group_type")]
+    pub group_type: GroupType,
     #[serde(with = "serde_base64")]
     pub sym_enc_g_key: Vec<u8>,
 }
