@@ -1,8 +1,7 @@
-pub const BASE_URL: &'static str = "https://app.tuta.com";
-pub const CLIENT: &'static str = "Firefox Browser";
-
-pub const CLIENT_VERSION: &'static str = "3.118.30";
-pub const MODEL_VERSION: &'static str = "90.64";
+const BASE_URL: &'static str = "https://app.tuta.com";
+const CLIENT: &'static str = "Firefox Browser";
+const CLIENT_VERSION: &'static str = "3.118.30";
+const MODEL_VERSION: &'static str = "90.64";
 
 pub mod config;
 pub mod salt;
@@ -14,6 +13,7 @@ pub mod mailboxgrouproot;
 pub mod mailfolder;
 pub mod mail;
 pub mod mailbody;
+pub mod websocket;
 
 mod serialize;
 mod request;
