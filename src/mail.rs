@@ -28,8 +28,7 @@ pub struct Mail {
     #[serde(with = "serde_base64")]
     pub method: Vec<u8>,
     pub moved_time: String,
-    #[serde(with = "serde_base64", rename = "_ownerEncSessionKey")] // if this is null, do a PUT
-                                                                    // with ?updateOwnerEncSessionKey=true
+    #[serde(with = "serde_base64", rename = "_ownerEncSessionKey")] // with ?updateOwnerEncSessionKey=true
     pub owner_enc_session_key: Vec<u8>,
     #[serde(rename = "_ownerGroup")]
     pub owner_group: String,
@@ -61,7 +60,7 @@ pub struct Sender {
     pub name: Vec<u8>,
 }
 
-pub fn fetch(access_token: &str, mails: &str) -> Result<Vec<Mail>> {
+pub fn fetch_from_inbox(access_token: &str, mails: &str) -> Result<Vec<Mail>> {
     let mut url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mail/{}", mails).as_str())?;
     url.query_pairs_mut()
@@ -76,6 +75,21 @@ pub fn fetch(access_token: &str, mails: &str) -> Result<Vec<Mail>> {
     Ok(response)
 }
 
+pub fn fetch_from_id(
+    access_token: &str,
+    instance_list_id: &str,
+    instance_id: &str,
+) -> Result<Mail> {
+    let url = url::Url::parse(super::BASE_URL)?
+        .join(format!("/rest/tutanota/mail/{}/{}", instance_list_id, instance_id).as_str())?;
+
+    let response = super::request::auth_get(url, access_token)
+        .send()?
+        .json::<Mail>()?;
+
+    Ok(response)
+}
+
 pub fn update(access_token: &str, mail: &Mail) -> Result<()> {
     let url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mail/{}/{}", mail.id.0, mail.id.1).as_str())?;
@@ -83,7 +97,8 @@ pub fn update(access_token: &str, mail: &Mail) -> Result<()> {
     let payload = serde_json::to_string(&mail)?;
     let _ = super::request::auth_put(url, access_token)
         .body(payload)
-        .send()?.error_for_status()?;
+        .send()?
+        .error_for_status()?;
 
     Ok(())
 }

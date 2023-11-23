@@ -51,7 +51,7 @@ fn main() -> Result<()> {
 
     for inbox in &inboxes {
         debug!("Fetching mails from: {:?}", inbox.folder_type);
-        let mails = mail::fetch(&access_token, &inbox.mails)?;
+        let mails = mail::fetch_from_inbox(&access_token, &inbox.mails)?;
         for mut mail in mails {
             // skip read mails
             if mail.unread == "0" {

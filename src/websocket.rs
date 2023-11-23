@@ -3,6 +3,8 @@ use std::net::TcpStream;
 use tracing::debug;
 use tungstenite::Message;
 use tungstenite::{protocol::WebSocket as TWebSocket, stream::MaybeTlsStream};
+use serde::Deserialize;
+use super::serialize::*;
 
 pub struct WebSocketConnector {
     url: url::Url,
@@ -11,8 +13,31 @@ pub struct WebSocket {
     socket: TWebSocket<MaybeTlsStream<TcpStream>>,
 }
 
-#[derive(Debug)]
-pub struct EntityUpdate {}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityUpdate {
+    pub event_batch: Vec<Event>
+}
+
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Event {
+    pub instance_id: String,
+    pub instance_list_id: String,
+    #[serde(with = "serde_operation_type")]
+    pub operation: OperationType,
+    #[serde(rename = "type")]
+    pub event_type: String
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub enum OperationType {
+    Create,
+    Update,
+    Delete,
+}
+
 
 impl WebSocketConnector {
     pub fn from_url(access_token: &str, user_id: &str) -> Result<WebSocketConnector> {
@@ -49,8 +74,8 @@ impl WebSocket {
                         if let Some((a, b)) = text.split_once(";") {
                             match a {
                                 "entityUpdate" => {
-                                    debug!("Handle {} request with body {}", a, b);
-                                    return Ok(EntityUpdate{});
+                                    debug!("Handle {} request", a);
+                                    return Ok(serde_json::from_str(b)?);
                                 },
                                 _ => debug!("Received ignored response: {}", a),
                             }

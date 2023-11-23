@@ -136,3 +136,34 @@ pub mod serde_mail_folder_type {
         }
     }
 }
+
+pub mod serde_operation_type {
+    use crate::websocket::OperationType;
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<OperationType, D::Error> {
+        deserializer.deserialize_str(OperationTypeVisitor)
+    }
+
+    struct OperationTypeVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for OperationTypeVisitor {
+        type Value = OperationType;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "an integer between 0 and 11 as a string")
+        }
+
+        fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+            match value {
+                "0" => Ok(OperationType::Create),
+                "1" => Ok(OperationType::Update),
+                "2" => Ok(OperationType::Delete),
+                _ => {
+                Err(serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Str(value),
+                    &self,
+                ))
+                }
+            }
+        }
+    }
+}
