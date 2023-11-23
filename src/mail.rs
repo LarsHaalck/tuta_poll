@@ -28,7 +28,8 @@ pub struct Mail {
     #[serde(with = "serde_base64")]
     pub method: Vec<u8>,
     pub moved_time: String,
-    #[serde(with = "serde_base64", rename = "_ownerEncSessionKey")]
+    #[serde(with = "serde_base64", rename = "_ownerEncSessionKey")] // if this is null, do a PUT
+                                                                    // with ?updateOwnerEncSessionKey=true
     pub owner_enc_session_key: Vec<u8>,
     #[serde(rename = "_ownerGroup")]
     pub owner_group: String,
