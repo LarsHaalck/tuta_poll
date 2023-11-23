@@ -31,6 +31,49 @@ pub mod serde_base64 {
     }
 }
 
+pub mod serde_option_base64 {
+    use base64::{engine::general_purpose as engines, Engine as _};
+
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Vec<u8>>, D::Error> {
+        deserializer.deserialize_str(OptionBase64Visitor)
+    }
+
+    struct OptionBase64Visitor;
+
+    impl<'de> serde::de::Visitor<'de> for OptionBase64Visitor {
+        type Value = Option<Vec<u8>>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "optional base64 string")
+        }
+
+        fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+            engines::STANDARD
+                .decode(value)
+                .map_err(|_| {
+                    serde::de::Error::invalid_value(serde::de::Unexpected::Str(value), &self)
+                })
+                .map(|s| Some(s))
+        }
+
+        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+
+    pub fn serialize<S: serde::Serializer>(
+        value: &Option<Vec<u8>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(s) => serializer.serialize_str(&engines::STANDARD.encode(s)),
+            None => serializer.serialize_none(),
+        }
+    }
+}
+
 pub mod serde_format {
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<(), D::Error> {
         deserializer.deserialize_str(FormatVisitor)
@@ -64,7 +107,9 @@ pub mod serde_format {
 
 pub mod serde_group_type {
     use crate::user::GroupType;
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<GroupType, D::Error> {
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<GroupType, D::Error> {
         deserializer.deserialize_str(GroupTypeVisitor)
     }
 
@@ -91,12 +136,10 @@ pub mod serde_group_type {
                 "9" => Ok(GroupType::Calendar),
                 "10" => Ok(GroupType::Template),
                 "11" => Ok(GroupType::ContactList),
-                _ => {
-                Err(serde::de::Error::invalid_value(
+                _ => Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Str(value),
                     &self,
-                ))
-                }
+                )),
             }
         }
     }
@@ -104,7 +147,9 @@ pub mod serde_group_type {
 
 pub mod serde_mail_folder_type {
     use crate::mailfolder::MailFolderType;
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<MailFolderType, D::Error> {
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<MailFolderType, D::Error> {
         deserializer.deserialize_str(MailFolderTypeVisitor)
     }
 
@@ -126,12 +171,10 @@ pub mod serde_mail_folder_type {
                 "4" => Ok(MailFolderType::Archive),
                 "5" => Ok(MailFolderType::Spam),
                 "6" => Ok(MailFolderType::Draft),
-                _ => {
-                Err(serde::de::Error::invalid_value(
+                _ => Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Str(value),
                     &self,
-                ))
-                }
+                )),
             }
         }
     }
@@ -139,7 +182,9 @@ pub mod serde_mail_folder_type {
 
 pub mod serde_operation_type {
     use crate::websocket::OperationType;
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<OperationType, D::Error> {
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<OperationType, D::Error> {
         deserializer.deserialize_str(OperationTypeVisitor)
     }
 
@@ -157,12 +202,10 @@ pub mod serde_operation_type {
                 "0" => Ok(OperationType::Create),
                 "1" => Ok(OperationType::Update),
                 "2" => Ok(OperationType::Delete),
-                _ => {
-                Err(serde::de::Error::invalid_value(
+                _ => Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Str(value),
                     &self,
-                ))
-                }
+                )),
             }
         }
     }
