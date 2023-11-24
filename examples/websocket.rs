@@ -1,19 +1,25 @@
 use anyhow::{Error, Result};
-use config::Config;
 use tuta_poll::*;
 
-use tuta_poll::websocket::OperationType;
-use tuta_poll::user::GroupType;
+use inquire::Confirm;
 use lz4_flex::block::decompress_into;
+use tuta_poll::user::GroupType;
+use tuta_poll::websocket::OperationType;
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let config = Config::read("config.toml".into())?;
+    let mut email_address = String::new();
+    println!("Please enter email: ");
+    std::io::stdin()
+        .read_line(&mut email_address)
+        .expect("Expected email");
+    email_address = email_address.trim().to_string();
+    let password = rpassword::prompt_password("Password: ").expect("Expected password");
 
-    let salt = salt::fetch(&config.account.email_address)?;
-    let user_passphrase_key = crypto::create_user_passphrase_key(&config.account.password, &salt);
-    let session = session::fetch(&config.account.email_address, &user_passphrase_key)?;
+    let salt = salt::fetch(&email_address)?;
+    let user_passphrase_key = crypto::create_user_passphrase_key(&password, &salt);
+    let session = session::fetch(&email_address, &user_passphrase_key)?;
 
     let access_token = session.access_token;
     let user = user::fetch(&access_token, &session.user)?;
@@ -40,29 +46,34 @@ fn main() -> Result<()> {
                 .iter()
                 .filter(|b| b.operation == OperationType::Create)
                 .collect();
-            let mail_ids: Vec<_> = events
-                .iter()
-                .filter(|b| b.event_type == "Mail")
-                .collect();
+            let mail_ids: Vec<_> = events.iter().filter(|b| b.event_type == "Mail").collect();
 
             println!("Mail: {:?}", mail_ids);
             for mail_id in mail_ids {
-                let mail =
-                    mail::fetch_from_id(&access_token, &mail_id.instance_list_id, &mail_id.instance_id)?;
-                let session_key =
-                    crypto::decrypt_key(&mail_group_key, &mail.owner_enc_session_key).unwrap();
+                let mail = mail::fetch_from_id(
+                    &access_token,
+                    &mail_id.instance_list_id,
+                    &mail_id.instance_id,
+                )?;
+                let session_key = crypto::decrypt_key(
+                    &mail_group_key,
+                    &mail.owner_enc_session_key.as_ref().unwrap(),
+                )
+                .unwrap();
                 let session_sub_keys = crypto::SubKeys::new(session_key);
 
-                let subject = if config.display.subject {
-                    let tmp = crypto::decrypt_with_mac(&session_sub_keys, &mail.subject)?;
-                    std::str::from_utf8(&tmp)
-                        .expect("Subject could not converted to UTF-8")
-                        .to_string()
-                } else {
-                    "∅".to_string()
-                };
+                let subject =
+                    if let Ok(true) = Confirm::new("Show subject?").with_default(false).prompt() {
+                        let tmp = crypto::decrypt_with_mac(&session_sub_keys, &mail.subject)?;
+                        std::str::from_utf8(&tmp)
+                            .expect("Subject could not converted to UTF-8")
+                            .to_string()
+                    } else {
+                        "∅".to_string()
+                    };
 
-                let name = if config.display.name {
+                let name = if let Ok(true) = Confirm::new("Show name?").with_default(false).prompt()
+                {
                     let tmp = crypto::decrypt_with_mac(&session_sub_keys, &mail.sender.name)?;
                     std::str::from_utf8(&tmp)
                         .expect("Name could not converted to UTF-8")
@@ -71,18 +82,15 @@ fn main() -> Result<()> {
                     "∅".to_string()
                 };
 
-                let address = if config.display.name {
-                    mail.sender.address.to_string()
-                } else {
-                    "∅".to_string()
-                };
-
                 println!(
                     "new mail, subject: {:?}, from: {:?} <{:?}>, [{} attachments]",
-                    subject, name, address, mail.attachments.len()
+                    subject,
+                    name,
+                    mail.sender.address.to_string(),
+                    mail.attachments.len()
                 );
 
-                if config.display.body {
+                if let Ok(true) = Confirm::new("Show body?").with_default(false).prompt() {
                     let mailbody = mailbody::fetch(&access_token, &mail.body)?;
                     let compressed_text = crypto::decrypt_with_mac(&session_sub_keys, &mailbody)?;
                     let mut buf: Vec<u8> = vec![0; mailbody.len() * 6];
@@ -90,7 +98,6 @@ fn main() -> Result<()> {
                     buf.resize(size, 0);
                     println!("mail body: {}", std::str::from_utf8(&buf).unwrap());
                 }
-
             }
         }
         println!("Error");
