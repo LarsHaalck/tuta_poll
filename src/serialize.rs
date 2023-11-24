@@ -7,7 +7,7 @@ pub mod serde_base64 {
         deserializer.deserialize_str(Base64Visitor)
     }
 
-    struct Base64Visitor;
+    pub struct Base64Visitor;
 
     impl<'de> serde::de::Visitor<'de> for Base64Visitor {
         type Value = Vec<u8>;
@@ -32,12 +32,13 @@ pub mod serde_base64 {
 }
 
 pub mod serde_option_base64 {
+    use crate::serialize::serde_base64;
     use base64::{engine::general_purpose as engines, Engine as _};
 
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(
         deserializer: D,
     ) -> Result<Option<Vec<u8>>, D::Error> {
-        deserializer.deserialize_str(OptionBase64Visitor)
+        deserializer.deserialize_option(OptionBase64Visitor)
     }
 
     struct OptionBase64Visitor;
@@ -49,13 +50,13 @@ pub mod serde_option_base64 {
             write!(formatter, "optional base64 string")
         }
 
-        fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
-            engines::STANDARD
-                .decode(value)
-                .map_err(|_| {
-                    serde::de::Error::invalid_value(serde::de::Unexpected::Str(value), &self)
-                })
-                .map(|s| Some(s))
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::de::Deserializer<'de>,
+        {
+            Ok(Some(
+                deserializer.deserialize_str(serde_base64::Base64Visitor)?,
+            ))
         }
 
         fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {

@@ -81,8 +81,27 @@ pub fn fetch_from_id(
     instance_list_id: &str,
     instance_id: &str,
 ) -> Result<Mail> {
-    let url = url::Url::parse(super::BASE_URL)?
+    let response = fetch_from_id_update(access_token, instance_list_id, instance_id, false);
+    match &response {
+        Ok(m) => match m.owner_enc_session_key {
+            Some(_) => response,
+            None => fetch_from_id_update(access_token, instance_list_id, instance_id, true)
+        },
+        Err(_) => response
+    }
+}
+
+pub fn fetch_from_id_update(
+    access_token: &str,
+    instance_list_id: &str,
+    instance_id: &str,
+    update: bool
+) -> Result<Mail> {
+    let mut url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mail/{}/{}", instance_list_id, instance_id).as_str())?;
+    if update {
+        url.set_query(Some("updateOwnerEncSessionKey=true"));
+    }
 
     let response = super::request::auth_get(url, access_token)
         .send()?

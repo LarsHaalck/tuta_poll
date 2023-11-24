@@ -1,7 +1,7 @@
-use anyhow::Result;
-use serde::Deserialize;
 use super::serialize::*;
 use anyhow::Error;
+use anyhow::Result;
+use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 struct Response {
@@ -12,16 +12,21 @@ struct Response {
 }
 
 pub fn fetch(email_address: &str) -> Result<Vec<u8>> {
-    let payload = format!("_body={}", serde_json::json!({
-        "_format": "0",
-        "mailAddress": email_address
-    })).to_string();
+    let payload = format!(
+        "_body={}",
+        serde_json::json!({
+            "_format": "0",
+            "mailAddress": email_address
+        })
+    )
+    .to_string();
 
-    let mut url = url::Url::parse(super::BASE_URL)?
-        .join("/rest/sys/saltservice")?;
+    let mut url = url::Url::parse(super::BASE_URL)?.join("/rest/sys/saltservice")?;
     url.set_query(Some(&payload));
 
-    let response = reqwest::blocking::get(url)?.json::<Response>()?;
+    let response = reqwest::blocking::get(url)?
+        .error_for_status()?
+        .json::<Response>()?;
     let salt = response.salt;
     if salt.len() == 16 {
         Ok(salt)
