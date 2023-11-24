@@ -47,6 +47,11 @@ pub fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session>
         .join("/rest/sys/sessionservice")?;
 
     let client = reqwest::blocking::Client::new();
-    let response = client.post(url).body(payload).send()?.json::<Session>()?;
+    let response = client
+        .post(url)
+        .body(payload)
+        .send()?
+        .error_for_status()?
+        .json::<Session>()?;
     Ok(response)
 }

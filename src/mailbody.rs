@@ -15,6 +15,7 @@ pub fn fetch(access_token: &str, body: &str) -> Result<Vec<u8>> {
         .join(format!("/rest/tutanota/mailbody/{}", body).as_str())?;
     let response = super::request::auth_get(url, access_token)
         .send()?
+        .error_for_status()?
         .json::<Mailbody>()?;
     Ok(response.text)
 }

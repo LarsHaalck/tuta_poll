@@ -15,6 +15,7 @@ pub fn fetch(access_token: &str, group: &str)-> Result<String> {
 
     let response = super::request::auth_get(url, access_token)
         .send()?
+        .error_for_status()?
         .json::<Response>()?;
     Ok(response.mailbox)
 }

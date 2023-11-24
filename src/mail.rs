@@ -70,6 +70,7 @@ pub fn fetch_from_inbox(access_token: &str, mails: &str) -> Result<Vec<Mail>> {
 
     let response = super::request::auth_get(url, access_token)
         .send()?
+        .error_for_status()?
         .json::<Vec<Mail>>()?;
 
     Ok(response)
@@ -85,6 +86,7 @@ pub fn fetch_from_id(
 
     let response = super::request::auth_get(url, access_token)
         .send()?
+        .error_for_status()?
         .json::<Mail>()?;
 
     Ok(response)

@@ -50,6 +50,7 @@ pub fn fetch(access_token: &str, user: &str) -> Result<User> {
 
     let response = super::request::auth_get(url, access_token)
         .send()?
+        .error_for_status()?
         .json::<User>()?;
     Ok(response)
 }

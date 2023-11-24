@@ -38,6 +38,7 @@ pub fn fetch(access_token: &str, folders: &str) -> Result<Vec<Folder>> {
 
     let response = super::request::auth_get(url, access_token)
         .send()?
+        .error_for_status()?
         .json::<Vec<Folder>>()?;
     Ok(response)
 }
