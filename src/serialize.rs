@@ -160,7 +160,7 @@ pub mod serde_mail_folder_type {
         type Value = MailFolderType;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(formatter, "an integer between 0 and 11 as a string")
+            write!(formatter, "an integer between 0 and 6 as a string")
         }
 
         fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
@@ -195,7 +195,7 @@ pub mod serde_operation_type {
         type Value = OperationType;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(formatter, "an integer between 0 and 11 as a string")
+            write!(formatter, "an integer between 0 and 2 as a string")
         }
 
         fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {

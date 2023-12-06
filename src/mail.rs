@@ -1,6 +1,7 @@
 use super::serialize::*;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -28,7 +29,7 @@ pub struct Mail {
     #[serde(with = "serde_base64")]
     pub method: Vec<u8>,
     pub moved_time: String,
-    #[serde(with = "serde_option_base64", rename = "_ownerEncSessionKey")] // with ?updateOwnerEncSessionKey=true
+    #[serde(with = "serde_option_base64", rename = "_ownerEncSessionKey")]
     pub owner_enc_session_key: Option<Vec<u8>>,
     #[serde(rename = "_ownerGroup")]
     pub owner_group: String,
@@ -39,7 +40,6 @@ pub struct Mail {
     pub recipient_count: String,
     pub reply_tos: Vec<Sender>,
     pub reply_type: String,
-    pub restrictions: (),
     pub sent_date: String,
     pub sender: Sender,
     pub state: String,
@@ -68,12 +68,23 @@ pub fn fetch_from_inbox(access_token: &str, mails: &str) -> Result<Vec<Mail>> {
         .append_pair("count", "1000")
         .append_pair("reverse", "true");
 
-    let response = super::request::auth_get(url, access_token)
+    let mut mails = super::request::auth_get(url.clone(), access_token)
         .send()?
         .error_for_status()?
         .json::<Vec<Mail>>()?;
 
-    Ok(response)
+    for mail in mails.iter_mut() {
+        if mail.owner_enc_session_key == None {
+            debug!("Fetching info for mail: {}/{}", &mail.id.0, &mail.id.1);
+            let new_mail = fetch_from_id(access_token, &mail.id.0, &mail.id.1)?;
+            debug!("new_mail: {:?}", new_mail);
+        }
+    }
+
+    debug!("url: {}", url.as_str());
+    debug!("response: {:?}", mails);
+
+    Ok(mails)
 }
 
 pub fn fetch_from_id(
@@ -85,7 +96,10 @@ pub fn fetch_from_id(
     match &response {
         Ok(m) => match m.owner_enc_session_key {
             Some(_) => response,
-            None => fetch_from_id_update(access_token, instance_list_id, instance_id, true)
+            None => {
+                debug!("Got null _ownerEncSessionKey, Retrying...");
+                fetch_from_id_update(access_token, instance_list_id, instance_id, true)
+            }
         },
         Err(_) => response
     }
