@@ -1,17 +1,20 @@
-use super::serialize::*;
-use anyhow::Error;
-use anyhow::Result;
+use crate::serialize::*;
+use crate::types::Aes128Key;
+use anyhow::{Context, Result};
 use serde::Deserialize;
+use tracing::debug;
 
 #[derive(Deserialize, Debug)]
 struct Response {
     #[serde(with = "serde_format")]
     _format: (),
-    #[serde(with = "serde_base64")]
-    salt: Vec<u8>,
+    #[serde(with = "serde_base64_16")]
+    salt: Aes128Key,
 }
 
-pub fn fetch(email_address: &str) -> Result<Vec<u8>> {
+pub fn fetch(email_address: &str) -> Result<Aes128Key> {
+    debug!("Fetching salt");
+
     let payload = format!(
         "_body={}",
         serde_json::json!({
@@ -27,10 +30,5 @@ pub fn fetch(email_address: &str) -> Result<Vec<u8>> {
     let response = reqwest::blocking::get(url)?
         .error_for_status()?
         .json::<Response>()?;
-    let salt = response.salt;
-    if salt.len() == 16 {
-        Ok(salt)
-    } else {
-        Err(Error::msg("Salt has wrong length"))
-    }
+    response.salt.try_into().context("failed")
 }

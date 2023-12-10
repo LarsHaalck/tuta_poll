@@ -31,32 +31,77 @@ pub mod serde_base64 {
     }
 }
 
-pub mod serde_option_base64 {
+pub mod serde_base64_16 {
+    use base64::{engine::general_purpose as engines, Engine as _};
+
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; 16], D::Error> {
+        deserializer.deserialize_str(Base64_16Visitor)
+    }
+
+    pub struct Base64_16Visitor;
+
+    impl<'de> serde::de::Visitor<'de> for Base64_16Visitor {
+        type Value = [u8; 16];
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "base64 string with a decoded length of 16")
+        }
+
+        fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+            let decode = engines::STANDARD.decode(value).map_err(|_| {
+                serde::de::Error::invalid_value(serde::de::Unexpected::Str(value), &self)
+            })?;
+
+            decode.try_into().map_err(|_| {
+                serde::de::Error::invalid_value(serde::de::Unexpected::Str(value), &self)
+            })
+        }
+    }
+
+    pub fn serialize<S: serde::Serializer>(
+        value: &[u8; 16],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&engines::STANDARD.encode(value))
+    }
+}
+
+pub mod serde_option_base64_16 {
     use crate::serialize::serde_base64;
     use base64::{engine::general_purpose as engines, Engine as _};
 
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(
         deserializer: D,
-    ) -> Result<Option<Vec<u8>>, D::Error> {
-        deserializer.deserialize_option(OptionBase64Visitor)
+    ) -> Result<Option<[u8; 16]>, D::Error> {
+        deserializer.deserialize_option(OptionBase64_16Visitor)
     }
 
-    struct OptionBase64Visitor;
+    struct OptionBase64_16Visitor;
 
-    impl<'de> serde::de::Visitor<'de> for OptionBase64Visitor {
-        type Value = Option<Vec<u8>>;
+    impl<'de> serde::de::Visitor<'de> for OptionBase64_16Visitor {
+        type Value = Option<[u8; 16]>;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(formatter, "optional base64 string")
+            write!(
+                formatter,
+                "optional base64 string with a decoded length of 16"
+            )
         }
 
         fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
         where
             D: serde::de::Deserializer<'de>,
         {
-            Ok(Some(
-                deserializer.deserialize_str(serde_base64::Base64Visitor)?,
-            ))
+            let decode = deserializer.deserialize_str(serde_base64::Base64Visitor)?;
+            if decode.is_empty() {
+                return Ok(None);
+            }
+            let value = decode.try_into().map_err(|_| {
+                serde::de::Error::custom("Wrong length")
+            })?;
+            Ok(Some(value))
         }
 
         fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
@@ -65,7 +110,7 @@ pub mod serde_option_base64 {
     }
 
     pub fn serialize<S: serde::Serializer>(
-        value: &Option<Vec<u8>>,
+        value: &Option<[u8; 16]>,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
         match value {
@@ -106,108 +151,28 @@ pub mod serde_format {
     }
 }
 
-pub mod serde_group_type {
-    use crate::user::GroupType;
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<GroupType, D::Error> {
-        deserializer.deserialize_str(GroupTypeVisitor)
+pub mod string_to_enum {
+    use num_enum::TryFromPrimitive;
+
+    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+    where
+        T: TryFromPrimitive<Primitive = u8>,
+        D: serde::Deserializer<'de>,
+    {
+        use serde::Deserialize;
+        let s = String::deserialize(deserializer)?;
+        let num = s
+            .parse::<u8>()
+            .map_err(|_| serde::de::Error::custom("Expected u8 wrapped in a string"))?;
+        T::try_from_primitive(num)
+            .map_err(|_| serde::de::Error::custom("Expected a variant of the enum"))
     }
 
-    struct GroupTypeVisitor;
-
-    impl<'de> serde::de::Visitor<'de> for GroupTypeVisitor {
-        type Value = GroupType;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(formatter, "an integer between 0 and 11 as a string")
-        }
-
-        fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
-            match value {
-                "0" => Ok(GroupType::User),
-                "1" => Ok(GroupType::Admin),
-                "2" => Ok(GroupType::MailingList),
-                "3" => Ok(GroupType::Customer),
-                "4" => Ok(GroupType::External),
-                "5" => Ok(GroupType::Mail),
-                "6" => Ok(GroupType::Contact),
-                "7" => Ok(GroupType::File),
-                "8" => Ok(GroupType::LocalAdmin),
-                "9" => Ok(GroupType::Calendar),
-                "10" => Ok(GroupType::Template),
-                "11" => Ok(GroupType::ContactList),
-                _ => Err(serde::de::Error::invalid_value(
-                    serde::de::Unexpected::Str(value),
-                    &self,
-                )),
-            }
-        }
-    }
-}
-
-pub mod serde_mail_folder_type {
-    use crate::mailfolder::MailFolderType;
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<MailFolderType, D::Error> {
-        deserializer.deserialize_str(MailFolderTypeVisitor)
-    }
-
-    struct MailFolderTypeVisitor;
-
-    impl<'de> serde::de::Visitor<'de> for MailFolderTypeVisitor {
-        type Value = MailFolderType;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(formatter, "an integer between 0 and 6 as a string")
-        }
-
-        fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
-            match value {
-                "0" => Ok(MailFolderType::Custom),
-                "1" => Ok(MailFolderType::Inbox),
-                "2" => Ok(MailFolderType::Sent),
-                "3" => Ok(MailFolderType::Trash),
-                "4" => Ok(MailFolderType::Archive),
-                "5" => Ok(MailFolderType::Spam),
-                "6" => Ok(MailFolderType::Draft),
-                _ => Err(serde::de::Error::invalid_value(
-                    serde::de::Unexpected::Str(value),
-                    &self,
-                )),
-            }
-        }
-    }
-}
-
-pub mod serde_operation_type {
-    use crate::websocket::OperationType;
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<OperationType, D::Error> {
-        deserializer.deserialize_str(OperationTypeVisitor)
-    }
-
-    struct OperationTypeVisitor;
-
-    impl<'de> serde::de::Visitor<'de> for OperationTypeVisitor {
-        type Value = OperationType;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(formatter, "an integer between 0 and 2 as a string")
-        }
-
-        fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
-            match value {
-                "0" => Ok(OperationType::Create),
-                "1" => Ok(OperationType::Update),
-                "2" => Ok(OperationType::Delete),
-                _ => Err(serde::de::Error::invalid_value(
-                    serde::de::Unexpected::Str(value),
-                    &self,
-                )),
-            }
-        }
+    pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        T: Into<u8> + Clone,
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&value.clone().into().to_string())
     }
 }

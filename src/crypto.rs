@@ -3,16 +3,17 @@ use hmac::{Hmac, Mac};
 use aes::cipher::block_padding::Pkcs7;
 use aes::cipher::{KeyIvInit, BlockDecryptMut};
 use sha2::{Digest};
+use crate::types::Aes128Key;
 
 const MAC_SIZE: usize = 32;
 
 pub struct SubKeys {
-    cipher: [u8; 16],
-    mac: [u8; 16],
+    cipher: Aes128Key,
+    mac: Aes128Key,
 }
 
 impl SubKeys {
-    pub fn new(key: [u8; 16]) -> Self {
+    pub fn new(key: Aes128Key) -> Self {
         let mut hasher = sha2::Sha256::new();
         hasher.update(key);
         let hash = hasher.finalize();
@@ -24,7 +25,7 @@ impl SubKeys {
     }
 }
 
-pub fn create_user_passphrase_key(passphrase: &str, salt: &[u8]) -> [u8; 16] {
+pub fn create_user_passphrase_key(passphrase: &str, salt: &Aes128Key) -> Aes128Key {
     let mut hasher = sha2::Sha256::new();
     hasher.update(passphrase);
     let user_passphrase_hash = hasher.finalize();
@@ -38,20 +39,16 @@ pub fn create_user_passphrase_key(passphrase: &str, salt: &[u8]) -> [u8; 16] {
     user_passphrase_key
 }
 
-pub fn decrypt_key(key: &[u8], message: &[u8]) -> Result<[u8; 16]> {
+pub fn decrypt_key(key: &Aes128Key, message: &Aes128Key) -> Aes128Key {
     use aes::cipher::{KeyInit, BlockDecrypt};
-    if key.len() == 16 && message.len() == 16 {
-        let mut output = [0; 16];
-        output.copy_from_slice(message);
-        let cipher = aes::Aes128::new(key.into());
-        cipher.decrypt_block(output.as_mut().into());
-        for byte in &mut output {
-            *byte ^= 0x88;
-        }
-        Ok(output)
-    } else {
-        Err(Error::msg("key and message have wrong length (!= 16)"))
+    let mut output = [0; 16];
+    output.copy_from_slice(message);
+    let cipher = aes::Aes128::new(key.into());
+    cipher.decrypt_block(output.as_mut().into());
+    for byte in &mut output {
+        *byte ^= 0x88;
     }
+    output
 }
 
 pub fn decrypt_with_mac(sub_keys: &SubKeys, message: &[u8]) -> Result<Vec<u8>> {
