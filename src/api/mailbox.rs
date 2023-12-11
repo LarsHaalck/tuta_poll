@@ -1,7 +1,7 @@
 use crate::serialize::*;
 use anyhow::Result;
 use serde::Deserialize;
-use tracing::debug;
+use tracing::{debug, trace};
 
 #[derive(Deserialize)]
 struct Response {
@@ -20,11 +20,14 @@ pub fn fetch(access_token: &str, mailbox: &str) -> Result<String> {
     let url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mailbox/{}", mailbox).as_str())?;
 
-    let response = crate::request::auth_get(url, access_token)
+    let folders = crate::request::auth_get(url, access_token)
         .send()?
         .error_for_status()?
-        .json::<Response>()?;
+        .json::<Response>()?
+        .folders
+        .folders;
 
-    debug!("Fetched mailbox: {:?}", response.folders.folders);
-    Ok(response.folders.folders)
+    debug!("Fetched mailbox");
+    trace!("mailbox: {:#?}", folders);
+    Ok(folders)
 }

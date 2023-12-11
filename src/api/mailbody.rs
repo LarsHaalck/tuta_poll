@@ -1,8 +1,8 @@
 use crate::serialize::*;
+use crate::types::Base64;
 use anyhow::Result;
 use serde::Deserialize;
-use tracing::debug;
-use crate::types::Base64;
+use tracing::{debug, trace};
 
 #[derive(Debug, Deserialize)]
 pub struct Mailbody {
@@ -16,11 +16,14 @@ pub fn fetch(access_token: &str, body: &str) -> Result<Vec<u8>> {
     debug!("Fetching body");
     let url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mailbody/{}", body).as_str())?;
-    let response = crate::request::auth_get(url, access_token)
+
+    let text = crate::request::auth_get(url, access_token)
         .send()?
         .error_for_status()?
-        .json::<Mailbody>()?;
+        .json::<Mailbody>()?
+        .text;
 
     debug!("Fetched body");
-    Ok(response.text)
+    trace!("body: {:?}", text);
+    Ok(text)
 }

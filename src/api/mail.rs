@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tracing::debug;
+use tracing::{debug, trace};
 use crate::types::Mail;
 
 pub fn fetch_from_inbox(access_token: &str, mails: &str) -> Result<Vec<Mail>> {
@@ -17,7 +17,7 @@ pub fn fetch_from_inbox(access_token: &str, mails: &str) -> Result<Vec<Mail>> {
         .json::<Vec<Mail>>()?;
 
     debug!("Fetched {} mails", mails.len());
-
+    trace!("mails: {:#?}", mails);
     Ok(mails)
 }
 
@@ -30,13 +30,13 @@ pub fn fetch_from_id(
     let url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mail/{}/{}", instance_list_id, instance_id).as_str())?;
 
-    let response = crate::request::auth_get(url, access_token)
+    let mail = crate::request::auth_get(url, access_token)
         .send()?
         .error_for_status()?
         .json::<Mail>()?;
     debug!("Fetched single mail");
-
-    Ok(response)
+    trace!("mail: {:#?}", mail);
+    Ok(mail)
 }
 
 pub fn update(access_token: &str, mail: &Mail) -> Result<()> {

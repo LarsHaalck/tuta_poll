@@ -1,10 +1,10 @@
 use crate::serialize::*;
+use crate::types::Session;
 use anyhow::Result;
 use base64::{engine::general_purpose as engines, Engine as _};
 use serde::Serialize;
 use sha2::Digest;
-use crate::types::Session;
-use tracing::debug;
+use tracing::{debug, trace};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,8 +38,7 @@ pub fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session>
         user: (),
     })?;
 
-    let url = url::Url::parse(super::BASE_URL)?
-        .join("/rest/sys/sessionservice")?;
+    let url = url::Url::parse(super::BASE_URL)?.join("/rest/sys/sessionservice")?;
 
     let client = reqwest::blocking::Client::new();
     let session = client
@@ -48,6 +47,7 @@ pub fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session>
         .send()?
         .error_for_status()?
         .json::<Session>()?;
-    debug!("Fetched session: {:#?}", session);
+    debug!("Fetched session");
+    trace!("session: {:#?}", session);
     Ok(session)
 }

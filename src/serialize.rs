@@ -98,8 +98,8 @@ pub mod serde_option_base64_16 {
             if decode.is_empty() {
                 return Ok(None);
             }
-            let value = decode.try_into().map_err(|_| {
-                serde::de::Error::custom("Wrong length")
+            let value = decode.clone().try_into().map_err(|_| {
+                serde::de::Error::custom(format!("Wrong length {} != 16", decode.len()))
             })?;
             Ok(Some(value))
         }
@@ -111,6 +111,56 @@ pub mod serde_option_base64_16 {
 
     pub fn serialize<S: serde::Serializer>(
         value: &Option<[u8; 16]>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(s) => serializer.serialize_str(&engines::STANDARD.encode(s)),
+            None => serializer.serialize_none(),
+        }
+    }
+}
+
+pub mod serde_option_base64 {
+    use crate::serialize::serde_base64;
+    use base64::{engine::general_purpose as engines, Engine as _};
+
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Vec<u8>>, D::Error> {
+        deserializer.deserialize_option(OptionBase64Visitor)
+    }
+
+    struct OptionBase64Visitor;
+
+    impl<'de> serde::de::Visitor<'de> for OptionBase64Visitor {
+        type Value = Option<Vec<u8>>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(
+                formatter,
+                "optional base64 string"
+            )
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::de::Deserializer<'de>,
+        {
+            let decode = deserializer.deserialize_str(serde_base64::Base64Visitor)?;
+            if decode.is_empty() {
+                return Ok(None);
+            }
+
+            Ok(Some(decode))
+        }
+
+        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+
+    pub fn serialize<S: serde::Serializer>(
+        value: &Option<Vec<u8>>,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
         match value {

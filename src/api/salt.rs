@@ -30,5 +30,7 @@ pub fn fetch(email_address: &str) -> Result<Aes128Key> {
     let response = reqwest::blocking::get(url)?
         .error_for_status()?
         .json::<Response>()?;
-    response.salt.try_into().context("failed")
+
+    debug!("Fetched salt");
+    response.salt.try_into().context("salt is too big")
 }

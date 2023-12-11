@@ -1,6 +1,6 @@
 use anyhow::Result;
 use crate::types::User;
-use tracing::debug;
+use tracing::{debug, trace};
 
 
 pub fn fetch(access_token: &str, user: &str) -> Result<User> {
@@ -14,6 +14,7 @@ pub fn fetch(access_token: &str, user: &str) -> Result<User> {
         .error_for_status()?
         .json::<User>()?;
 
-    debug!("Fetched user: {:#?}", user);
+    debug!("Fetched user");
+    trace!("user: {:#?}", user);
     Ok(user)
 }

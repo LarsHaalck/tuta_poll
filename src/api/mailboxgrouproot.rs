@@ -1,7 +1,7 @@
-use serde::Deserialize;
 use crate::serialize::*;
 use anyhow::Result;
-use tracing::debug;
+use serde::Deserialize;
+use tracing::{debug, trace};
 
 #[derive(Deserialize)]
 struct Response {
@@ -10,16 +10,18 @@ struct Response {
     mailbox: String,
 }
 
-pub fn fetch(access_token: &str, group: &str)-> Result<String> {
+pub fn fetch(access_token: &str, group: &str) -> Result<String> {
     debug!("Fetching mailboxgrouproot");
-    let url =
-        url::Url::parse(super::BASE_URL)?.join(format!("/rest/tutanota/mailboxgrouproot/{}", group).as_str())?;
+    let url = url::Url::parse(super::BASE_URL)?
+        .join(format!("/rest/tutanota/mailboxgrouproot/{}", group).as_str())?;
 
-    let response = crate::request::auth_get(url, access_token)
+    let mailbox = crate::request::auth_get(url, access_token)
         .send()?
         .error_for_status()?
-        .json::<Response>()?;
+        .json::<Response>()?
+        .mailbox;
 
-    debug!("Fetched mailboxgrouproot: {:#?}", response.mailbox);
-    Ok(response.mailbox)
+    debug!("Fetched mailboxgrouproot");
+    trace!("mailboxgrouproot: {:?}", mailbox);
+    Ok(mailbox)
 }

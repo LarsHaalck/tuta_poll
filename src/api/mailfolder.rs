@@ -1,6 +1,6 @@
 use crate::types::Folder;
 use anyhow::Result;
-use tracing::debug;
+use tracing::{debug, trace};
 
 pub fn fetch(access_token: &str, folders: &str) -> Result<Vec<Folder>> {
     debug!("Fetching mailfolder");
@@ -11,11 +11,12 @@ pub fn fetch(access_token: &str, folders: &str) -> Result<Vec<Folder>> {
         .append_pair("count", "1000")
         .append_pair("reverse", "false");
 
-    let response = crate::request::auth_get(url, access_token)
+    let folders = crate::request::auth_get(url, access_token)
         .send()?
         .error_for_status()?
         .json::<Vec<Folder>>()?;
 
-    debug!("Fetched mailfolder: {:#?}", response);
-    Ok(response)
+    debug!("Fetched mailfolder");
+    trace!("mailfolder: {:#?}", folders);
+    Ok(folders)
 }

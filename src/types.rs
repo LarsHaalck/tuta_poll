@@ -1,6 +1,8 @@
+use crate::crypto;
 use crate::serialize::*;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub type Id = String;
 pub type IdTuple = (Id, Id);
@@ -23,12 +25,40 @@ pub struct User {
     pub memberships: Vec<Membership>,
     #[serde(rename = "userGroup")]
     pub user_group: UserGroup,
+
+    #[serde(skip)]
+    group_keys: HashMap<Id, Aes128Key>,
 }
 
 impl User {
     pub fn has_group(&self, group_id: &Id) -> bool {
         return self.user_group.group == *group_id
             || self.memberships.iter().any(|m| m.group == *group_id);
+    }
+
+    pub fn unlock_group_keys(&mut self, user_passphrase_key: &Aes128Key) {
+        let user_group_key =
+            crypto::decrypt_key(&user_passphrase_key, &self.user_group.sym_enc_g_key);
+
+        self.group_keys
+            .insert(self.user_group.group.clone(), user_group_key.clone());
+
+        for member in &self.memberships {
+            if let Some(sym) = member.sym_enc_g_key {
+                self.group_keys.insert(
+                    member.group.clone(),
+                    crypto::decrypt_key(&user_group_key, &sym),
+                );
+            }
+        }
+    }
+
+    pub fn get_group_key(&self, group_id: &Id) -> Option<Aes128Key> {
+        self.group_keys.get(group_id).copied()
+    }
+
+    pub fn get_user_group_key(&self) -> Aes128Key {
+        self.group_keys.get(&self.user_group.group).copied().unwrap()
     }
 }
 
@@ -171,13 +201,15 @@ pub struct Sender {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Permission  {
+pub struct Permission {
     #[serde(with = "serde_format", rename = "_format")]
     _format: (),
     #[serde(with = "string_to_enum", rename = "type")]
     pub permission_type: PermissionType,
     #[serde(with = "serde_option_base64_16")]
     pub bucket_enc_session_key: Option<Aes128Key>,
+    #[serde(rename = "_ownerEncSessionKey")]
+    pub owner_enc_session_key: Option<Aes128Key>,
     #[serde(rename = "_ownerGroup")]
     pub owner_group: Option<Id>,
     pub bucket: Option<Bucket>,
@@ -191,18 +223,18 @@ pub enum PermissionType {
     PublicSymmetric,
     Unencrypted,
     External,
-    OwnerList
+    OwnerList,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct Bucket  {
-    pub bucket_permission: Id
+pub struct Bucket {
+    pub bucket_permissions: Id,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BucketPermission  {
+pub struct BucketPermission {
     #[serde(with = "serde_format", rename = "_format")]
     _format: (),
     #[serde(with = "string_to_enum", rename = "type")]
@@ -211,10 +243,11 @@ pub struct BucketPermission  {
     pub owner_group: Option<Id>,
     #[serde(with = "serde_option_base64_16")]
     pub owner_enc_bucket_key: Option<Aes128Key>,
-    #[serde(with = "serde_option_base64_16")]
-    pub pub_enc_buckt_key: Option<Aes128Key>,
+    #[serde(with = "serde_option_base64")]
+    pub pub_enc_bucket_key: Option<Base64>,
     #[serde(with = "serde_option_base64_16")]
     pub sym_enc_bucket_key: Option<Aes128Key>,
+    pub group: Id
 }
 
 #[derive(Debug, PartialEq, TryFromPrimitive, IntoPrimitive, Clone)]
@@ -224,3 +257,17 @@ pub enum BucketPermissionType {
     External = 3,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Group {
+    #[serde(rename = "_id")]
+    pub id: String,
+    pub keys: Vec<KeyPair>
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyPair {
+    #[serde(with = "serde_base64")]
+    pub sym_enc_priv_key: Base64,
+}
