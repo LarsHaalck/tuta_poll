@@ -207,6 +207,14 @@ pub struct BucketPermission  {
     _format: (),
     #[serde(with = "string_to_enum", rename = "type")]
     pub permission_type: BucketPermissionType,
+    #[serde(rename = "_ownerGroup")]
+    pub owner_group: Option<Id>,
+    #[serde(with = "serde_option_base64_16")]
+    pub owner_enc_bucket_key: Option<Aes128Key>,
+    #[serde(with = "serde_option_base64_16")]
+    pub pub_enc_buckt_key: Option<Aes128Key>,
+    #[serde(with = "serde_option_base64_16")]
+    pub sym_enc_bucket_key: Option<Aes128Key>,
 }
 
 #[derive(Debug, PartialEq, TryFromPrimitive, IntoPrimitive, Clone)]

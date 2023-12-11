@@ -5,16 +5,17 @@ use crate::api::{
     permission, salt, session, user,
 };
 use crate::crypto;
-use anyhow::{Error, Result};
+use anyhow::{bail, Error, Result};
 use lz4_flex::decompress_into;
 use types::{
-    Aes128Key, BucketPermissionType, Folder, GroupType, Id, Mail, MailFolderType, PermissionType,
-    User,
+    Aes128Key, BucketPermission, BucketPermissionType, Folder, GroupType, Id, Mail, MailFolderType,
+    Permission, PermissionType, User,
 };
 
 pub struct Client {
     config: config::Account,
     access_token: String,
+    user_group_key: Aes128Key,
     mail_group_key: Aes128Key,
     inboxes: Vec<Folder>,
     user: User,
@@ -67,6 +68,7 @@ impl Client {
         Ok(Client {
             config: config.clone(),
             access_token,
+            user_group_key,
             mail_group_key,
             inboxes,
             user,
@@ -126,26 +128,52 @@ impl Client {
 
         match bucket_permission.permission_type {
             BucketPermissionType::Public => {
-                self.resolve_public_bucket(mail, &bucket_permission, &pub_or_external_perm)
+                self.resolve_public_bucket(&bucket_permission, &pub_or_external_perm)
             }
             BucketPermissionType::External => {
-                self.resolve_external_bucket(mail, &bucket_permission, &pub_or_external_perm)
+                self.resolve_external_bucket(&bucket_permission, &pub_or_external_perm)
             }
         }
     }
 
-    fn resolve_public_bucket(&self, mail: &Mail) -> Result<Aes128Key> {
-        return Ok(crypto::decrypt_key(
-            &self.mail_group_key,
-            &mail.owner_enc_session_key.as_ref().unwrap(),
-        ));
+    fn resolve_public_bucket(
+        &self,
+        bucket_perm: &BucketPermission,
+        perm: &Permission,
+    ) -> Result<Aes128Key> {
+        let pub_enc_bucket_key = bucket_perm
+            .pub_enc_buckt_key
+            .ok_or(Error::msg("PubEncBucketKey is not defined"))?;
+
+        let bucket_enc_session_key = perm
+            .bucket_enc_session_key
+            .ok_or(Error::msg("BucktEncSessionKey is not defined"))?;
+
+        let sk = crypto::decrypt_key(&bucket_key, &bucket_enc_session_key);
+
+        if let Some(og) = bucket_perm.owner_group {
+
+        }
     }
 
-    fn resolve_external_bucket(&self, mail: &Mail) -> Result<Aes128Key> {
-        return Ok(crypto::decrypt_key(
-            &self.mail_group_key,
-            &mail.owner_enc_session_key.as_ref().unwrap(),
-        ));
+    fn resolve_external_bucket(
+        &self,
+        bucket_perm: &BucketPermission,
+        perm: &Permission,
+    ) -> Result<Aes128Key> {
+        let bucket_key;
+        if let Some(bk) = bucket_perm.owner_enc_bucket_key {
+            bucket_key = crypto::decrypt_key(&self.user_group_key, &bk);
+        } else if let Some(sym) = bucket_perm.sym_enc_bucket_key {
+            bucket_key = crypto::decrypt_key(&self.user_group_key, &sym);
+        } else {
+            bail!("BucketEncSessionKey is not defined for Permission")
+        }
+
+        let msg = perm
+            .bucket_enc_session_key
+            .ok_or(Error::msg("bucket enc session key not defined"))?;
+        Ok(crypto::decrypt_key(&bucket_key, &msg))
     }
 
     fn resolve_session_key(&self, mail: &Mail) -> Result<Aes128Key> {
