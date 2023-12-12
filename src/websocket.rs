@@ -6,24 +6,24 @@ use tracing::debug;
 use tungstenite::Message;
 use tungstenite::{protocol::WebSocket as TWebSocket, stream::MaybeTlsStream};
 
-pub struct WebSocketConnector {
+pub struct WebSocketConnector<'a> {
     url: url::Url,
-    access_token: String,
-    inboxes: Vec<String>,
+    access_token: &'a str,
+    inboxes: &'a Vec<String>,
 }
 
-pub struct WebSocket {
+pub struct WebSocket<'a> {
     socket: TWebSocket<MaybeTlsStream<TcpStream>>,
-    access_token: String,
-    inboxes: Vec<String>,
+    access_token: &'a str,
+    inboxes: &'a Vec<String>,
 }
 
-impl WebSocketConnector {
-    pub fn from_url(
-        access_token: &str,
+impl WebSocketConnector<'_> {
+    pub fn from_url<'a>(
+        access_token: &'a str,
         user_id: &str,
-        inboxes: &Vec<String>,
-    ) -> Result<WebSocketConnector> {
+        inboxes: &'a Vec<String>,
+    ) -> Result<WebSocketConnector<'a>> {
         let mut url = url::Url::parse(crate::api::BASE_URL)?.join("event")?;
         url.set_scheme("wss")
             .map_err(|e| Error::msg(format!("Could not set scheme to wss with error {:?}", e)))?;
@@ -34,8 +34,8 @@ impl WebSocketConnector {
             .append_pair("accessToken", access_token);
         Ok(WebSocketConnector {
             url,
-            access_token: access_token.to_string(),
-            inboxes: inboxes.clone(),
+            access_token: &access_token,
+            inboxes: &inboxes,
         })
     }
 
@@ -50,13 +50,13 @@ impl WebSocketConnector {
 
         Ok(WebSocket {
             socket,
-            access_token: self.access_token.clone(),
-            inboxes: self.inboxes.clone(),
+            access_token: &self.access_token,
+            inboxes: &self.inboxes,
         })
     }
 }
 
-impl WebSocket {
+impl WebSocket<'_> {
     pub fn read_create(&mut self) -> Result<Vec<Mail>> {
         let update = self.read_all()?;
         let events : Vec<_> = update
@@ -70,7 +70,7 @@ impl WebSocket {
             Ok(Vec::new())
         } else {
             let mut mails = Vec::new();
-            for inbox in &self.inboxes {
+            for inbox in self.inboxes {
                 mails.extend(api::mail::fetch_from_inbox(&self.access_token, &inbox)?);
             }
             Ok(mails)
