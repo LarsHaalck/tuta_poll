@@ -64,7 +64,7 @@ fn main() -> Result<()> {
 
                 let subject =
                     if let Ok(true) = Confirm::new("Show subject?").with_default(false).prompt() {
-                        let tmp = crypto::decrypt_with_mac(&session_sub_keys, &mail.subject)?;
+                        let tmp = crypto::aes_decrypt(&session_sub_keys, &mail.subject)?;
                         std::str::from_utf8(&tmp)
                             .expect("Subject could not converted to UTF-8")
                             .to_string()
@@ -74,7 +74,7 @@ fn main() -> Result<()> {
 
                 let name = if let Ok(true) = Confirm::new("Show name?").with_default(false).prompt()
                 {
-                    let tmp = crypto::decrypt_with_mac(&session_sub_keys, &mail.sender.name)?;
+                    let tmp = crypto::aes_decrypt(&session_sub_keys, &mail.sender.name)?;
                     std::str::from_utf8(&tmp)
                         .expect("Name could not converted to UTF-8")
                         .to_string()
@@ -92,7 +92,7 @@ fn main() -> Result<()> {
 
                 if let Ok(true) = Confirm::new("Show body?").with_default(false).prompt() {
                     let mailbody = mailbody::fetch(&access_token, &mail.body)?;
-                    let compressed_text = crypto::decrypt_with_mac(&session_sub_keys, &mailbody)?;
+                    let compressed_text = crypto::aes_decrypt(&session_sub_keys, &mailbody)?;
                     let mut buf: Vec<u8> = vec![0; mailbody.len() * 6];
                     let size = decompress_into(&compressed_text, &mut buf)?;
                     buf.resize(size, 0);

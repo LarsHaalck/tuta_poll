@@ -11,6 +11,7 @@ use types::{
     Aes128Key, Base64, BucketPermission, BucketPermissionType, Folder, GroupType, Id, Mail,
     MailFolderType, Permission, PermissionType, User,
 };
+use tracing::{debug, warn};
 
 pub struct Client {
     config: config::Account,
@@ -91,6 +92,7 @@ impl Client {
     }
 
     fn resolve_session_key_owner(&self, mail: &Mail) -> Result<Aes128Key> {
+        debug!("resolve session key with owner key");
         let gk = self
             .user
             .get_group_key(&mail.owner_group)
@@ -103,6 +105,7 @@ impl Client {
     }
 
     fn try_symmetric_permission(&self, perms: &Vec<Permission>) -> Option<Aes128Key> {
+        debug!("try symmetric permission");
         let sym_perm = perms.iter().find(|p| {
             p.permission_type == PermissionType::PublicSymmetric
                 || p.permission_type == PermissionType::Symmetric
@@ -129,6 +132,7 @@ impl Client {
         perms: &Vec<Permission>,
         mail: &Mail,
     ) -> Result<Aes128Key> {
+        debug!("resolve session key from public or external bucket");
         let pub_or_external_perm = perms
             .iter()
             .find(|p| {
@@ -156,7 +160,7 @@ impl Client {
                 self.resolve_external_bucket(&bucket_permission, &pub_or_external_perm)
             }
             BucketPermissionType::Public => {
-                self.resolve_public_bucket(&bucket_permission, &pub_or_external_perm)
+                self.resolve_public_bucket(mail, &bucket_permission, &pub_or_external_perm)
             }
         }
     }
@@ -166,6 +170,7 @@ impl Client {
         bucket_perm: &BucketPermission,
         perm: &Permission,
     ) -> Result<Aes128Key> {
+        debug!("decrypt with external bucket");
         let bucket_key;
         if let Some(bk) = bucket_perm.owner_enc_bucket_key {
             bucket_key = crypto::decrypt_key(
@@ -192,6 +197,7 @@ impl Client {
         bucket_perm: &BucketPermission,
         perm: &Permission,
     ) -> Result<Aes128Key> {
+        debug!("decrypt with public bucket");
         let pub_enc_bucket_key = bucket_perm
             .pub_enc_bucket_key
             .clone()
@@ -205,14 +211,37 @@ impl Client {
             self.decrypt_bucket_key_key_pair_group(&bucket_perm.group, &pub_enc_bucket_key)?;
         let sk = crypto::decrypt_key(&bucket_key, &bucket_enc_session_key);
 
-        // if let Some(og) = bucket_perm.owner_group {
+        // if let Some(og) = &bucket_perm.owner_group {
         //     // update sym perm
         //     let bucket_perm_ogk = self.user.get_group_key(&og).unwrap();
-        //     let bucket_perm_gk = self.user.get_group_key(bucket_perm.group).unwrap();
-        //     // self.update_sym_perm_key()?;
+        //     let bucket_perm_gk = self.user.get_group_key(&bucket_perm.group).unwrap();
+        //     self.update_sym_perm_key(mail, perm, &bucket_perm_ogk, &bucket_perm_gk)?;
         // }
 
         Ok(sk)
+    }
+
+    fn update_sym_perm_key(
+        &self,
+        mail: &mut Mail,
+        perm: &Permission,
+        bucket_perm_ogk: &Aes128Key,
+        bucket_perm_gk: &Aes128Key,
+    ) -> Result<()> {
+        // if !self.user.is_leader() {
+        //     return Ok(());
+        // }
+
+        debug!("update with symmetric permission key");
+        if mail.owner_enc_session_key.is_none() && perm.owner_group == Some(mail.owner_group.clone()) {
+            mail.owner_enc_session_key = Some(crypto::encrypt_key(bucket_perm_ogk, bucket_perm_gk));
+            mail::update(&self.access_token, &mail, true)?;
+
+        } else {
+            warn!("shared permission not implemented");
+        }
+
+        Ok(())
     }
 
     fn decrypt_bucket_key_key_pair_group(
@@ -220,6 +249,7 @@ impl Client {
         key_pair: &Id,
         pub_enc_bucket_key: &Base64,
     ) -> Result<Aes128Key> {
+        debug!("decrypt bucket key with key pair of group");
         let group = group::fetch(&self.access_token, &key_pair)?;
         let key_pair = &group.keys[0];
         let priv_key = crypto::decrypt_rsa_key(
@@ -232,7 +262,8 @@ impl Client {
             .map_err(|_| Error::msg("Could not convert to [u8; 16]"))
     }
 
-    fn resolve_session_key(&self, mail: &Mail) -> Result<Aes128Key> {
+    fn resolve_session_key(&self, mail: &mut Mail) -> Result<Aes128Key> {
+        debug!("Resolve session key");
         if mail.owner_enc_session_key.is_some() && self.user.has_group(&mail.owner_group) {
             self.resolve_session_key_owner(mail)
         } else {
@@ -299,7 +330,7 @@ impl Client {
         }
 
         mail.unread = "0".to_string();
-        mail::update(&self.access_token, &mail)?;
+        mail::update(&self.access_token, &mail, false)?;
         Ok(())
     }
 }

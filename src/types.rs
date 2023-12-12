@@ -28,6 +28,8 @@ pub struct User {
 
     #[serde(skip)]
     group_keys: HashMap<Id, Aes128Key>,
+    #[serde(skip)]
+    leader_status: bool,
 }
 
 impl User {
@@ -59,6 +61,10 @@ impl User {
 
     pub fn get_user_group_key(&self) -> Aes128Key {
         self.group_keys.get(&self.user_group.group).copied().unwrap()
+    }
+
+    pub fn is_leader(&self) -> bool {
+        self.leader_status
     }
 }
 

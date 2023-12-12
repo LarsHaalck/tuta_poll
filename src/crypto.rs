@@ -5,9 +5,7 @@ use anyhow::{bail, Error, Result};
 use hmac::{Hmac, Mac};
 use rsa::RsaPrivateKey;
 use sha2::Digest;
-// use num_bigint_dig::ToPrimitive;
-use num_traits::cast::{ToPrimitive, FromPrimitive};
-use tracing::warn;
+use num_traits::cast::FromPrimitive;
 
 const MAC_SIZE: usize = 32;
 const RSA_KEY_LENGTH_BITS: usize = 2048;
@@ -60,6 +58,18 @@ pub fn decrypt_key(key: &Aes128Key, message: &Aes128Key) -> Aes128Key {
         *byte ^= 0x88;
     }
     output
+}
+
+pub fn encrypt_key(key: &Aes128Key, message: &Aes128Key) -> Aes128Key {
+    use aes::cipher::{BlockEncrypt, KeyInit};
+    let mut input = [0; 16];
+    input.copy_from_slice(message);
+    for byte in &mut input {
+        *byte ^= 0x88;
+    }
+    let cipher = aes::Aes128::new(key[..].into());
+    cipher.encrypt_block(input.as_mut().into());
+    input
 }
 
 pub fn aes_decrypt(key: &Aes128Key, message: &[u8]) -> Result<Vec<u8>> {
