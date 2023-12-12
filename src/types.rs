@@ -22,14 +22,14 @@ pub struct Session {
 pub struct User {
     #[serde(with = "serde_format")]
     _format: (),
+    #[serde(rename = "_id")]
+    pub id: Id,
     pub memberships: Vec<Membership>,
     #[serde(rename = "userGroup")]
     pub user_group: UserGroup,
 
     #[serde(skip)]
     group_keys: HashMap<Id, Aes128Key>,
-    #[serde(skip)]
-    leader_status: bool,
 }
 
 impl User {
@@ -60,11 +60,10 @@ impl User {
     }
 
     pub fn get_user_group_key(&self) -> Aes128Key {
-        self.group_keys.get(&self.user_group.group).copied().unwrap()
-    }
-
-    pub fn is_leader(&self) -> bool {
-        self.leader_status
+        self.group_keys
+            .get(&self.user_group.group)
+            .copied()
+            .unwrap()
     }
 }
 
@@ -253,7 +252,7 @@ pub struct BucketPermission {
     pub pub_enc_bucket_key: Option<Base64>,
     #[serde(with = "serde_option_base64_16")]
     pub sym_enc_bucket_key: Option<Aes128Key>,
-    pub group: Id
+    pub group: Id,
 }
 
 #[derive(Debug, PartialEq, TryFromPrimitive, IntoPrimitive, Clone)]
@@ -268,7 +267,7 @@ pub enum BucketPermissionType {
 pub struct Group {
     #[serde(rename = "_id")]
     pub id: String,
-    pub keys: Vec<KeyPair>
+    pub keys: Vec<KeyPair>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -276,4 +275,29 @@ pub struct Group {
 pub struct KeyPair {
     #[serde(with = "serde_base64")]
     pub sym_enc_priv_key: Base64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityUpdate {
+    pub event_batch: Vec<Event>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Event {
+    pub instance_id: String,
+    pub instance_list_id: String,
+    #[serde(with = "string_to_enum")]
+    pub operation: OperationType,
+    #[serde(rename = "type")]
+    pub event_type: String, // yes this is really a string
+}
+
+#[derive(Debug, PartialEq, TryFromPrimitive, IntoPrimitive, Clone)]
+#[repr(u8)]
+pub enum OperationType {
+    Create,
+    Update,
+    Delete,
 }

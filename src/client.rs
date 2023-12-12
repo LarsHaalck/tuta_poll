@@ -5,18 +5,19 @@ use crate::api::{
     salt, session, user,
 };
 use crate::crypto;
-use anyhow::{bail, Context, Error, Result};
+use anyhow::{bail, Error, Result};
 use lz4_flex::decompress_into;
+use tracing::debug;
 use types::{
-    Aes128Key, Base64, BucketPermission, BucketPermissionType, Folder, GroupType, Id, Mail,
-    MailFolderType, Permission, PermissionType, User,
+    Aes128Key, Base64, BucketPermission, BucketPermissionType, GroupType, Id, Mail, MailFolderType,
+    Permission, PermissionType, User,
 };
-use tracing::{debug, warn};
+use websocket::WebSocketConnector;
 
 pub struct Client {
     config: config::Account,
     access_token: String,
-    inboxes: Vec<Folder>,
+    inboxes: Vec<String>,
     user: User,
 }
 
@@ -61,6 +62,7 @@ impl Client {
         let inboxes: Vec<_> = folders
             .into_iter()
             .filter(|folder| folder.folder_type == MailFolderType::Inbox)
+            .map(|folder| folder.mails)
             .collect();
 
         Ok(Client {
@@ -86,7 +88,7 @@ impl Client {
     pub fn get_mails(&self) -> Result<Vec<Mail>> {
         let mut mails = Vec::new();
         for inbox in &self.inboxes {
-            mails.extend(mail::fetch_from_inbox(&self.access_token, &inbox.mails)?);
+            mails.extend(mail::fetch_from_inbox(&self.access_token, &inbox)?);
         }
         Ok(mails)
     }
@@ -127,11 +129,7 @@ impl Client {
         }
     }
 
-    fn resolve_session_key_public_external(
-        &self,
-        perms: &Vec<Permission>,
-        mail: &Mail,
-    ) -> Result<Aes128Key> {
+    fn resolve_session_key_public_external(&self, perms: &Vec<Permission>) -> Result<Aes128Key> {
         debug!("resolve session key from public or external bucket");
         let pub_or_external_perm = perms
             .iter()
@@ -160,7 +158,7 @@ impl Client {
                 self.resolve_external_bucket(&bucket_permission, &pub_or_external_perm)
             }
             BucketPermissionType::Public => {
-                self.resolve_public_bucket(mail, &bucket_permission, &pub_or_external_perm)
+                self.resolve_public_bucket(&bucket_permission, &pub_or_external_perm)
             }
         }
     }
@@ -221,28 +219,29 @@ impl Client {
         Ok(sk)
     }
 
-    fn update_sym_perm_key(
-        &self,
-        mail: &mut Mail,
-        perm: &Permission,
-        bucket_perm_ogk: &Aes128Key,
-        bucket_perm_gk: &Aes128Key,
-    ) -> Result<()> {
-        // if !self.user.is_leader() {
-        //     return Ok(());
-        // }
+    // broken and should never be used
+    // fn update_sym_perm_key(
+    //     &self,
+    //     mail: &Mail,
+    //     perm: &Permission,
+    //     bucket_perm_ogk: &Aes128Key,
+    //     bucket_perm_gk: &Aes128Key,
+    // ) -> Result<()> {
+    //     if !self.user.is_leader() {
+    //         return Ok(());
+    //     }
 
-        debug!("update with symmetric permission key");
-        if mail.owner_enc_session_key.is_none() && perm.owner_group == Some(mail.owner_group.clone()) {
-            mail.owner_enc_session_key = Some(crypto::encrypt_key(bucket_perm_ogk, bucket_perm_gk));
-            mail::update(&self.access_token, &mail, true)?;
+    //     debug!("update with symmetric permission key");
+    //     if mail.owner_enc_session_key.is_none() && perm.owner_group == Some(mail.owner_group.clone()) {
+    //         mail.owner_enc_session_key = Some(crypto::encrypt_key(bucket_perm_ogk, bucket_perm_gk));
+    //         mail::update(&self.access_token, &mail, true)?;
 
-        } else {
-            warn!("shared permission not implemented");
-        }
+    //     } else {
+    //         warn!("shared permission not implemented");
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn decrypt_bucket_key_key_pair_group(
         &self,
@@ -262,7 +261,7 @@ impl Client {
             .map_err(|_| Error::msg("Could not convert to [u8; 16]"))
     }
 
-    fn resolve_session_key(&self, mail: &mut Mail) -> Result<Aes128Key> {
+    fn resolve_session_key(&self, mail: &Mail) -> Result<Aes128Key> {
         debug!("Resolve session key");
         if mail.owner_enc_session_key.is_some() && self.user.has_group(&mail.owner_group) {
             self.resolve_session_key_owner(mail)
@@ -270,7 +269,7 @@ impl Client {
             let perms = permission::fetch(&self.access_token, &mail.permissions)?;
             Ok(self
                 .try_symmetric_permission(&perms)
-                .unwrap_or(self.resolve_session_key_public_external(&perms, mail)?))
+                .unwrap_or(self.resolve_session_key_public_external(&perms)?))
         }
     }
 
@@ -332,5 +331,9 @@ impl Client {
         mail.unread = "0".to_string();
         mail::update(&self.access_token, &mail, false)?;
         Ok(())
+    }
+
+    pub fn get_websocket_connector(&self) -> Result<WebSocketConnector> {
+        WebSocketConnector::from_url(&self.access_token, &self.user.id, &self.inboxes)
     }
 }

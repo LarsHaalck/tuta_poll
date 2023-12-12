@@ -60,12 +60,12 @@ pub mod serde_base64_16 {
         }
     }
 
-    pub fn serialize<S: serde::Serializer>(
-        value: &[u8; 16],
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&engines::STANDARD.encode(value))
-    }
+    // pub fn serialize<S: serde::Serializer>(
+    //     value: &[u8; 16],
+    //     serializer: S,
+    // ) -> Result<S::Ok, S::Error> {
+    //     serializer.serialize_str(&engines::STANDARD.encode(value))
+    // }
 }
 
 pub mod serde_option_base64_16 {

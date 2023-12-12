@@ -32,7 +32,7 @@ pub fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session>
         access_key: (),
         auth_token: (),
         auth_verifier,
-        client_identifier: crate::CLIENT,
+        client_identifier: crate::api::CLIENT,
         mail_address: email_address,
         recover_code_verifier: (),
         user: (),

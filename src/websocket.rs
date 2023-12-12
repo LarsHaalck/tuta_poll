@@ -1,55 +1,42 @@
-use anyhow::{Error, Result, bail};
+use crate::api;
+use crate::types::{EntityUpdate, Mail, OperationType};
+use anyhow::{bail, Error, Result};
 use std::net::TcpStream;
 use tracing::debug;
 use tungstenite::Message;
 use tungstenite::{protocol::WebSocket as TWebSocket, stream::MaybeTlsStream};
-use serde::Deserialize;
-use super::serialize::*;
 
 pub struct WebSocketConnector {
     url: url::Url,
+    access_token: String,
+    inboxes: Vec<String>,
 }
+
 pub struct WebSocket {
     socket: TWebSocket<MaybeTlsStream<TcpStream>>,
+    access_token: String,
+    inboxes: Vec<String>,
 }
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EntityUpdate {
-    pub event_batch: Vec<Event>
-}
-
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Event {
-    pub instance_id: String,
-    pub instance_list_id: String,
-    #[serde(with = "serde_operation_type")]
-    pub operation: OperationType,
-    #[serde(rename = "type")]
-    pub event_type: String
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-pub enum OperationType {
-    Create,
-    Update,
-    Delete,
-}
-
 
 impl WebSocketConnector {
-    pub fn from_url(access_token: &str, user_id: &str) -> Result<WebSocketConnector> {
-        let mut url = url::Url::parse(super::BASE_URL)?.join("event")?;
+    pub fn from_url(
+        access_token: &str,
+        user_id: &str,
+        inboxes: &Vec<String>,
+    ) -> Result<WebSocketConnector> {
+        let mut url = url::Url::parse(crate::api::BASE_URL)?.join("event")?;
         url.set_scheme("wss")
             .map_err(|e| Error::msg(format!("Could not set scheme to wss with error {:?}", e)))?;
         url.query_pairs_mut()
-            .append_pair("modelVersions", &super::MODEL_VERSION)
-            .append_pair("clientVersion", &super::CLIENT_VERSION)
+            .append_pair("modelVersions", &crate::api::MODEL_VERSION)
+            .append_pair("clientVersion", &crate::api::CLIENT_VERSION)
             .append_pair("userId", user_id)
             .append_pair("accessToken", access_token);
-        Ok(WebSocketConnector { url })
+        Ok(WebSocketConnector {
+            url,
+            access_token: access_token.to_string(),
+            inboxes: inboxes.clone(),
+        })
     }
 
     pub fn connect(&self) -> Result<WebSocket> {
@@ -61,12 +48,35 @@ impl WebSocketConnector {
             debug!("* {}", header);
         }
 
-        Ok(WebSocket { socket })
+        Ok(WebSocket {
+            socket,
+            access_token: self.access_token.clone(),
+            inboxes: self.inboxes.clone(),
+        })
     }
 }
 
 impl WebSocket {
-    pub fn read(&mut self) -> Result<EntityUpdate> {
+    pub fn read_create(&mut self) -> Result<Vec<Mail>> {
+        let update = self.read_all()?;
+        let events : Vec<_> = update
+            .event_batch
+            .iter()
+            .filter(|b| b.operation == OperationType::Create)
+            .filter(|b| b.event_type == "Mail")
+            .collect();
+
+        if events.is_empty() {
+            Ok(Vec::new())
+        } else {
+            let mut mails = Vec::new();
+            for inbox in &self.inboxes {
+                mails.extend(api::mail::fetch_from_inbox(&self.access_token, &inbox)?);
+            }
+            Ok(mails)
+        }
+    }
+    fn read_all(&mut self) -> Result<EntityUpdate> {
         loop {
             if let Ok(msg) = self.socket.read() {
                 match msg {
@@ -76,7 +86,7 @@ impl WebSocket {
                                 "entityUpdate" => {
                                     debug!("Handle {} request", a);
                                     return Ok(serde_json::from_str(b)?);
-                                },
+                                }
                                 _ => debug!("Received ignored response: {}", a),
                             }
                         }
@@ -95,5 +105,10 @@ impl WebSocket {
                 }
             }
         }
+    }
+
+    pub fn close(&mut self) -> Result<()> {
+        self.socket.close(None)?;
+        Ok(())
     }
 }

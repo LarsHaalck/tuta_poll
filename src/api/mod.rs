@@ -1,4 +1,8 @@
-const BASE_URL: &'static str = "https://app.tuta.com";
+pub const BASE_URL: &'static str = "https://app.tuta.com";
+pub const CLIENT: &'static str = "Firefox Browser";
+pub const CLIENT_VERSION: &'static str = "3.118.30";
+pub const MODEL_VERSION: &'static str = "90.64";
+
 
 pub mod salt;
 pub mod session;

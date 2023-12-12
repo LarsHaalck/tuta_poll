@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tracing::{debug, info};
+use tracing::info;
 use tuta_poll::*;
 use tuta_poll::client::Client;
 
@@ -26,16 +26,17 @@ fn main() -> Result<()> {
     let client = Client::new(&config)?;
 
     let mails = client.get_mails()?;
-    let unread_mails : Vec<_> = mails.iter().filter(|m| m.unread == "1").collect();
-    info!("Got {} mails, {} unread", mails.len(), unread_mails.len());
-    for mail in unread_mails {
+    let num_mails = mails.len();
+    let mut unread_mails : Vec<_> = mails.into_iter().filter(|m| m.unread == "1").collect();
+    info!("Got {} mails, {} unread", num_mails, unread_mails.len());
+    for mail in &mut unread_mails {
         if mail.unread == "0" {
             continue;
         }
         let decrypted_mail = client.decrypt(&mail);
-        debug!("Got mail: {:?}", decrypted_mail);
+        info!("Got mail: {:?}", decrypted_mail);
 
-        // client.mark_read(&mut mail)?;
+        client.mark_read(mail)?;
     }
     Ok(())
 }
