@@ -20,7 +20,7 @@ struct Request<'a> {
     user: (),
 }
 
-pub fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session> {
+pub async fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session> {
     debug!("Fetching session");
 
     let mut hasher = sha2::Sha256::new();
@@ -40,13 +40,15 @@ pub fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session>
 
     let url = url::Url::parse(super::BASE_URL)?.join("/rest/sys/sessionservice")?;
 
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::Client::new();
     let session = client
         .post(url)
         .body(payload)
-        .send()?
+        .send()
+        .await?
         .error_for_status()?
-        .json::<Session>()?;
+        .json::<Session>()
+        .await?;
     debug!("Fetched session");
     trace!("session: {:#?}", session);
     Ok(session)

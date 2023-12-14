@@ -2,7 +2,7 @@ use crate::types::{Id, Permission};
 use anyhow::Result;
 use tracing::{debug, trace};
 
-pub fn fetch(access_token: &str, permission: &Id) -> Result<Vec<Permission>> {
+pub async fn fetch(access_token: &str, permission: &Id) -> Result<Vec<Permission>> {
     debug!("Fetching permission");
     let mut url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/sys/permission/{}", permission).as_str())?;
@@ -12,9 +12,11 @@ pub fn fetch(access_token: &str, permission: &Id) -> Result<Vec<Permission>> {
         .append_pair("reverse", "false");
 
     let permission = crate::request::auth_get(url, access_token)
-        .send()?
+        .send()
+        .await?
         .error_for_status()?
-        .json::<Vec<Permission>>()?;
+        .json::<Vec<Permission>>()
+        .await?;
 
     debug!("Fetched permission");
     trace!("permission: {:#?}", permission);

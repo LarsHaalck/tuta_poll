@@ -2,7 +2,7 @@ use crate::types::Folder;
 use anyhow::Result;
 use tracing::{debug, trace};
 
-pub fn fetch(access_token: &str, folders: &str) -> Result<Vec<Folder>> {
+pub async fn fetch(access_token: &str, folders: &str) -> Result<Vec<Folder>> {
     debug!("Fetching mailfolder");
     let mut url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mailfolder/{}", folders).as_str())?;
@@ -12,9 +12,11 @@ pub fn fetch(access_token: &str, folders: &str) -> Result<Vec<Folder>> {
         .append_pair("reverse", "false");
 
     let folders = crate::request::auth_get(url, access_token)
-        .send()?
+        .send()
+        .await?
         .error_for_status()?
-        .json::<Vec<Folder>>()?;
+        .json::<Vec<Folder>>()
+        .await?;
 
     debug!("Fetched mailfolder");
     trace!("mailfolder: {:#?}", folders);

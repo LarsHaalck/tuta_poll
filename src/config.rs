@@ -13,4 +13,3 @@ pub struct Account {
     #[serde(default)]
     pub show_body: bool,
 }
-

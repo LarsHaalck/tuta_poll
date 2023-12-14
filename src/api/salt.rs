@@ -12,7 +12,7 @@ struct Response {
     salt: Aes128Key,
 }
 
-pub fn fetch(email_address: &str) -> Result<Aes128Key> {
+pub async fn fetch(email_address: &str) -> Result<Aes128Key> {
     debug!("Fetching salt");
 
     let payload = format!(
@@ -27,9 +27,11 @@ pub fn fetch(email_address: &str) -> Result<Aes128Key> {
     let mut url = url::Url::parse(super::BASE_URL)?.join("/rest/sys/saltservice")?;
     url.set_query(Some(&payload));
 
-    let response = reqwest::blocking::get(url)?
+    let response = reqwest::get(url)
+        .await?
         .error_for_status()?
-        .json::<Response>()?;
+        .json::<Response>()
+        .await?;
 
     debug!("Fetched salt");
     response.salt.try_into().context("salt is too big")

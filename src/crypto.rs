@@ -3,9 +3,9 @@ use aes::cipher::block_padding::Pkcs7;
 use aes::cipher::{BlockDecryptMut, KeyIvInit};
 use anyhow::{bail, Error, Result};
 use hmac::{Hmac, Mac};
+use num_traits::cast::FromPrimitive;
 use rsa::RsaPrivateKey;
 use sha2::Digest;
-use num_traits::cast::FromPrimitive;
 
 const MAC_SIZE: usize = 32;
 const RSA_KEY_LENGTH_BITS: usize = 2048;

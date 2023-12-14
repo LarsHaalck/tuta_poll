@@ -3,7 +3,8 @@ use tracing::{info, warn};
 use tuta_poll::client::Client;
 use tuta_poll::*;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let mut email_address = String::new();
@@ -23,19 +24,19 @@ fn main() -> Result<()> {
         show_body: true,
     };
 
-    let client = Client::new(&config)?;
+    let client = Client::new(&config).await?;
     let connector = client.get_websocket_connector()?;
 
     loop {
         info!("Connecting to websocket");
         let mut socket = connector.connect()?;
 
-        while let Ok(mut mails) = socket.read_create() {
+        while let Ok(mut mails) = socket.read_create().await {
             info!("Got batch of {} mails", mails.len());
             for mail in &mut mails {
-                let decrypted_mail = client.decrypt(&mail);
+                let decrypted_mail = client.decrypt(&mail).await;
                 info!("Got mail: {:?}", decrypted_mail);
-                client.mark_read(mail)?;
+                client.mark_read(mail).await?;
             }
         }
         warn!("Error getting maisl. Retrying in 10s");

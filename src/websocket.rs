@@ -57,9 +57,9 @@ impl WebSocketConnector<'_> {
 }
 
 impl WebSocket<'_> {
-    pub fn read_create(&mut self) -> Result<Vec<Mail>> {
+    pub async fn read_create(&mut self) -> Result<Vec<Mail>> {
         let update = self.read_all()?;
-        let events : Vec<_> = update
+        let events: Vec<_> = update
             .event_batch
             .iter()
             .filter(|b| b.operation == OperationType::Create)
@@ -71,7 +71,7 @@ impl WebSocket<'_> {
         } else {
             let mut mails = Vec::new();
             for inbox in self.inboxes {
-                mails.extend(api::mail::fetch_from_inbox(&self.access_token, &inbox)?);
+                mails.extend(api::mail::fetch_from_inbox(&self.access_token, &inbox).await?);
             }
             Ok(mails)
         }

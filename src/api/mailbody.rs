@@ -12,15 +12,17 @@ pub struct Mailbody {
     pub text: Base64,
 }
 
-pub fn fetch(access_token: &str, body: &str) -> Result<Vec<u8>> {
+pub async fn fetch(access_token: &str, body: &str) -> Result<Vec<u8>> {
     debug!("Fetching body");
     let url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mailbody/{}", body).as_str())?;
 
     let text = crate::request::auth_get(url, access_token)
-        .send()?
+        .send()
+        .await?
         .error_for_status()?
-        .json::<Mailbody>()?
+        .json::<Mailbody>()
+        .await?
         .text;
 
     debug!("Fetched body");

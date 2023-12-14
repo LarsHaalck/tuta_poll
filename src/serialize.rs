@@ -136,10 +136,7 @@ pub mod serde_option_base64 {
         type Value = Option<Vec<u8>>;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(
-                formatter,
-                "optional base64 string"
-            )
+            write!(formatter, "optional base64 string")
         }
 
         fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>

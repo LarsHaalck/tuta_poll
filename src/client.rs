@@ -36,13 +36,13 @@ struct SessionData {
 }
 
 impl Client {
-    pub fn new(config: &config::Account) -> Result<Client> {
+    pub async fn new(config: &config::Account) -> Result<Client> {
         let SessionData {
             user_passphrase_key,
             access_token,
             user_id,
-        } = Self::create_session(config)?;
-        let mut user = user::fetch(&access_token, &user_id)?;
+        } = Self::create_session(config).await?;
+        let mut user = user::fetch(&access_token, &user_id).await?;
         user.unlock_group_keys(&user_passphrase_key);
         // let user_group_info = group_info::fetch(&access_token, &user.user_group.group_info)?;
         let mail_member = user
@@ -54,10 +54,10 @@ impl Client {
         // i have never seen a GroupType::Mail with empty sym_enc_g_key
         // let mail_group_key =
         //     crypto::decrypt_key(&user_group_key, &mail_member.sym_enc_g_key.unwrap());
-        let root = mailboxgrouproot::fetch(&access_token, &mail_member.group)?;
+        let root = mailboxgrouproot::fetch(&access_token, &mail_member.group).await?;
 
-        let mailbox = mailbox::fetch(&access_token, &root)?;
-        let folders = mailfolder::fetch(&access_token, &mailbox)?;
+        let mailbox = mailbox::fetch(&access_token, &root).await?;
+        let folders = mailfolder::fetch(&access_token, &mailbox).await?;
 
         let inboxes: Vec<_> = folders
             .into_iter()
@@ -73,10 +73,10 @@ impl Client {
         })
     }
 
-    fn create_session(config: &config::Account) -> Result<SessionData> {
-        let salt = salt::fetch(&config.email_address)?;
+    async fn create_session(config: &config::Account) -> Result<SessionData> {
+        let salt = salt::fetch(&config.email_address).await?;
         let user_passphrase_key = crypto::create_user_passphrase_key(&config.password, &salt);
-        let session = session::fetch(&config.email_address, &user_passphrase_key)?;
+        let session = session::fetch(&config.email_address, &user_passphrase_key).await?;
         let access_token = session.access_token;
         Ok(SessionData {
             user_passphrase_key,
@@ -85,10 +85,10 @@ impl Client {
         })
     }
 
-    pub fn get_mails(&self) -> Result<Vec<Mail>> {
+    pub async fn get_mails(&self) -> Result<Vec<Mail>> {
         let mut mails = Vec::new();
         for inbox in &self.inboxes {
-            mails.extend(mail::fetch_from_inbox(&self.access_token, &inbox)?);
+            mails.extend(mail::fetch_from_inbox(&self.access_token, &inbox).await?);
         }
         Ok(mails)
     }
@@ -129,7 +129,10 @@ impl Client {
         }
     }
 
-    fn resolve_session_key_public_external(&self, perms: &Vec<Permission>) -> Result<Aes128Key> {
+    async fn resolve_session_key_public_external(
+        &self,
+        perms: &Vec<Permission>,
+    ) -> Result<Aes128Key> {
         debug!("resolve session key from public or external bucket");
         let pub_or_external_perm = perms
             .iter()
@@ -144,7 +147,8 @@ impl Client {
             .clone()
             .ok_or(Error::msg("Bucket is null"))?
             .bucket_permissions;
-        let bucket_permissions = bucket_permission::fetch(&self.access_token, &bucket_perm_id)?;
+        let bucket_permissions =
+            bucket_permission::fetch(&self.access_token, &bucket_perm_id).await?;
         let bucket_permission = bucket_permissions
             .iter()
             .find(|p| {
@@ -159,6 +163,7 @@ impl Client {
             }
             BucketPermissionType::Public => {
                 self.resolve_public_bucket(&bucket_permission, &pub_or_external_perm)
+                    .await
             }
         }
     }
@@ -190,7 +195,7 @@ impl Client {
         Ok(crypto::decrypt_key(&bucket_key, &msg))
     }
 
-    fn resolve_public_bucket(
+    async fn resolve_public_bucket(
         &self,
         bucket_perm: &BucketPermission,
         perm: &Permission,
@@ -205,8 +210,9 @@ impl Client {
             .bucket_enc_session_key
             .ok_or(Error::msg("BucktEncSessionKey is not defined"))?;
 
-        let bucket_key =
-            self.decrypt_bucket_key_key_pair_group(&bucket_perm.group, &pub_enc_bucket_key)?;
+        let bucket_key = self
+            .decrypt_bucket_key_key_pair_group(&bucket_perm.group, &pub_enc_bucket_key)
+            .await?;
         let sk = crypto::decrypt_key(&bucket_key, &bucket_enc_session_key);
 
         // if let Some(og) = &bucket_perm.owner_group {
@@ -243,13 +249,13 @@ impl Client {
     //     Ok(())
     // }
 
-    fn decrypt_bucket_key_key_pair_group(
+    async fn decrypt_bucket_key_key_pair_group(
         &self,
         key_pair: &Id,
         pub_enc_bucket_key: &Base64,
     ) -> Result<Aes128Key> {
         debug!("decrypt bucket key with key pair of group");
-        let group = group::fetch(&self.access_token, &key_pair)?;
+        let group = group::fetch(&self.access_token, &key_pair).await?;
         let key_pair = &group.keys[0];
         let priv_key = crypto::decrypt_rsa_key(
             &self.user.get_group_key(&group.id).unwrap(),
@@ -261,20 +267,20 @@ impl Client {
             .map_err(|_| Error::msg("Could not convert to [u8; 16]"))
     }
 
-    fn resolve_session_key(&self, mail: &Mail) -> Result<Aes128Key> {
+    async fn resolve_session_key(&self, mail: &Mail) -> Result<Aes128Key> {
         debug!("Resolve session key");
         if mail.owner_enc_session_key.is_some() && self.user.has_group(&mail.owner_group) {
             self.resolve_session_key_owner(mail)
         } else {
-            let perms = permission::fetch(&self.access_token, &mail.permissions)?;
+            let perms = permission::fetch(&self.access_token, &mail.permissions).await?;
             Ok(self
                 .try_symmetric_permission(&perms)
-                .unwrap_or(self.resolve_session_key_public_external(&perms)?))
+                .unwrap_or(self.resolve_session_key_public_external(&perms).await?))
         }
     }
 
-    pub fn decrypt(&self, mail: &Mail) -> Result<MailContent> {
-        let session_key = self.resolve_session_key(mail)?;
+    pub async fn decrypt(&self, mail: &Mail) -> Result<MailContent> {
+        let session_key = self.resolve_session_key(mail).await?;
 
         let subject = if self.config.show_subject {
             let tmp = crypto::aes_decrypt(&session_key, &mail.subject)?;
@@ -301,7 +307,7 @@ impl Client {
         let address = mail.sender.address.to_string();
 
         let body = if self.config.show_body {
-            let mailbody = mailbody::fetch(&self.access_token, &mail.body)?;
+            let mailbody = mailbody::fetch(&self.access_token, &mail.body).await?;
             let compressed_text = crypto::aes_decrypt(&session_key, &mailbody)?;
             let mut buf: Vec<u8> = vec![0; mailbody.len() * 6];
             let size = decompress_into(&compressed_text, &mut buf)?;
@@ -323,13 +329,13 @@ impl Client {
         })
     }
 
-    pub fn mark_read(&self, mail: &mut Mail) -> Result<()> {
+    pub async fn mark_read(&self, mail: &mut Mail) -> Result<()> {
         if mail.unread == "0" {
             return Ok(());
         }
 
         mail.unread = "0".to_string();
-        mail::update(&self.access_token, &mail, false)?;
+        mail::update(&self.access_token, &mail, false).await?;
         Ok(())
     }
 
