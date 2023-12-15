@@ -190,7 +190,7 @@ pub struct Mail {
     #[serde(with = "serde_base64")]
     pub subject: Base64,
     pub to_recipients: Vec<Sender>,
-    #[serde(with = "string_to_enum", rename = "read")]
+    #[serde(with = "string_to_enum", rename = "unread")]
     pub read_status: ReadStatus,
 }
 
