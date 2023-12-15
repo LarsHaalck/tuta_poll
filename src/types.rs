@@ -190,7 +190,8 @@ pub struct Mail {
     #[serde(with = "serde_base64")]
     pub subject: Base64,
     pub to_recipients: Vec<Sender>,
-    pub unread: String,
+    #[serde(with = "string_to_enum", rename = "read")]
+    pub read_status: ReadStatus,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -203,6 +204,14 @@ pub struct Sender {
     #[serde(with = "serde_base64")]
     pub name: Base64,
 }
+
+#[derive(Debug, PartialEq, TryFromPrimitive, IntoPrimitive, Clone)]
+#[repr(u8)]
+pub enum ReadStatus {
+    Read = 0,
+    Unread = 1,
+}
+
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

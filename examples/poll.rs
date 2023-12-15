@@ -2,6 +2,7 @@ use anyhow::Result;
 use tracing::info;
 use tuta_poll::client::Client;
 use tuta_poll::*;
+use tuta_poll::types::ReadStatus;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,15 +29,11 @@ async fn main() -> Result<()> {
 
     let mails = client.get_mails().await?;
     let num_mails = mails.len();
-    let mut unread_mails: Vec<_> = mails.into_iter().filter(|m| m.unread == "1").collect();
+    let mut unread_mails: Vec<_> = mails.into_iter().filter(|m| m.read_status == ReadStatus::Unread).collect();
     info!("Got {} mails, {} unread", num_mails, unread_mails.len());
     for mail in &mut unread_mails {
-        if mail.unread == "0" {
-            continue;
-        }
         let decrypted_mail = client.decrypt(&mail).await;
         info!("Got mail: {:?}", decrypted_mail);
-
         client.mark_read(mail).await?;
     }
     Ok(())

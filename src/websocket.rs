@@ -1,5 +1,5 @@
 use crate::api;
-use crate::types::{EntityUpdate, Mail, OperationType};
+use crate::types::{EntityUpdate, Mail, OperationType, ReadStatus};
 use anyhow::{bail, Error, Result};
 use std::net::TcpStream;
 use tracing::debug;
@@ -71,7 +71,13 @@ impl WebSocket<'_> {
         } else {
             let mut mails = Vec::new();
             for inbox in self.inboxes {
-                mails.extend(api::mail::fetch_from_inbox(&self.access_token, &inbox).await?);
+                mails.extend(
+                    api::mail::fetch_from_inbox(&self.access_token, &inbox)
+                        .await?
+                        .into_iter()
+                        .filter(|m| m.read_status == ReadStatus::Unread)
+                        .collect::<Vec<Mail>>(),
+                );
             }
             Ok(mails)
         }

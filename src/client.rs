@@ -10,7 +10,7 @@ use lz4_flex::decompress_into;
 use tracing::debug;
 use types::{
     Aes128Key, Base64, BucketPermission, BucketPermissionType, GroupType, Id, Mail, MailFolderType,
-    Permission, PermissionType, User,
+    Permission, PermissionType, User, ReadStatus
 };
 use websocket::WebSocketConnector;
 
@@ -330,11 +330,11 @@ impl Client {
     }
 
     pub async fn mark_read(&self, mail: &mut Mail) -> Result<()> {
-        if mail.unread == "0" {
+        if mail.read_status == ReadStatus::Read {
             return Ok(());
         }
 
-        mail.unread = "0".to_string();
+        mail.read_status = ReadStatus::Read;
         mail::update(&self.access_token, &mail, false).await?;
         Ok(())
     }
