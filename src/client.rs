@@ -10,9 +10,12 @@ use lz4_flex::decompress_into;
 use tracing::debug;
 use types::{
     Aes128Key, Base64, BucketPermission, BucketPermissionType, GroupType, Id, Mail, MailFolderType,
-    Permission, PermissionType, User, ReadStatus
+    Permission, PermissionType, ReadStatus, User,
 };
 use websocket::WebSocketConnector;
+
+use async_stream::{stream, try_stream};
+use futures_core::stream::Stream;
 
 pub struct Client {
     config: config::Account,
@@ -85,12 +88,29 @@ impl Client {
         })
     }
 
-    pub async fn get_mails(&self) -> Result<Vec<Mail>> {
-        let mut mails = Vec::new();
-        for inbox in &self.inboxes {
-            mails.extend(mail::fetch_from_inbox(&self.access_token, &inbox).await?);
+    pub fn get_mails(&self) -> impl Stream<Item = Result<Mail>> + '_ {
+        try_stream! {
+            for inbox in &self.inboxes {
+                let mut start = None;
+                let curr_mails = mail::fetch_from_inbox(&self.access_token, &inbox, start).await?;
+                let mut n = curr_mails.len();
+                let mut last = curr_mails.last().map_or("".into(), |m| m.id.1.clone());
+
+                for mail in curr_mails {
+                    yield mail
+                }
+
+                while n > 0 {
+                    start = Some(last);
+                    let curr_mails = mail::fetch_from_inbox(&self.access_token, &inbox, start).await?;
+                    last = curr_mails.last().map_or("".into(), |m| m.id.1.clone());
+                    n = curr_mails.len();
+                    for mail in curr_mails {
+                        yield mail
+                    }
+                }
+            }
         }
-        Ok(mails)
     }
 
     fn resolve_session_key_owner(&self, mail: &Mail) -> Result<Aes128Key> {

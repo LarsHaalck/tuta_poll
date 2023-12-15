@@ -4,6 +4,10 @@ use tuta_poll::client::Client;
 use tuta_poll::*;
 use tuta_poll::types::ReadStatus;
 
+use futures_util::pin_mut;
+use futures_util::StreamExt;
+
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -27,14 +31,16 @@ async fn main() -> Result<()> {
 
     let client = Client::new(&config).await?;
 
-    let mails = client.get_mails().await?;
-    let num_mails = mails.len();
-    let mut unread_mails: Vec<_> = mails.into_iter().filter(|m| m.read_status == ReadStatus::Unread).collect();
-    info!("Got {} mails, {} unread", num_mails, unread_mails.len());
-    for mail in &mut unread_mails {
+    let mails = client.get_mails();
+    pin_mut!(mails);
+    while let Some(mail) = mails.next().await {
+        let mut mail = mail?;
+        if mail.read_status == ReadStatus::Read {
+            continue;
+        }
         let decrypted_mail = client.decrypt(&mail).await;
         info!("Got mail: {:?}", decrypted_mail);
-        client.mark_read(mail).await?;
+        client.mark_read(&mut mail).await?;
     }
     Ok(())
 }

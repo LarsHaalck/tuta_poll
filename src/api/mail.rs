@@ -1,15 +1,21 @@
-use crate::types::Mail;
+use crate::types::{Mail, Id};
 use anyhow::Result;
 use tracing::{debug, trace};
 
-pub async fn fetch_from_inbox(access_token: &str, mails: &str) -> Result<Vec<Mail>> {
+pub async fn fetch_from_inbox(access_token: &str, mails: &str, start: Option<Id>) -> Result<Vec<Mail>> {
     debug!("Fetching mails");
     let mut url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mail/{}", mails).as_str())?;
     url.query_pairs_mut()
-        .append_pair("start", "zzzzzzzzzzzz")
-        .append_pair("count", "1000")
+        .append_pair("count", "100")
         .append_pair("reverse", "true");
+    if let Some(s) = start {
+        url.query_pairs_mut()
+            .append_pair("start", &s);
+    } else {
+        url.query_pairs_mut()
+            .append_pair("start", "zzzzzzzzzzzz");
+    }
 
     let mails = crate::request::auth_get(url.clone(), access_token)
         .send()

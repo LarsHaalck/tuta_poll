@@ -161,7 +161,7 @@ pub struct Mail {
     #[serde(with = "serde_base64")]
     pub confidential: Base64,
     pub conversation_entry: (String, String),
-    pub different_envelope_sender: Option<Sender>,
+    pub different_envelope_sender: Option<String>,
     pub first_recipient: Sender,
     pub headers: Option<String>,
     #[serde(rename = "_id")]
