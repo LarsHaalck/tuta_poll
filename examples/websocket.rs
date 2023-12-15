@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
                 client.mark_read(mail).await?;
             }
         }
-        warn!("Error getting maisl. Retrying in 10s");
+        warn!("Error getting mails. Retrying in 10s");
         std::thread::sleep(std::time::Duration::from_secs(10));
     }
     // socket.close(None);

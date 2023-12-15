@@ -97,7 +97,7 @@ impl WebSocket<'_> {
                             }
                         }
                     }
-                    Message::Binary(_) => debug!("Got pinary reponse"),
+                    Message::Binary(_) => debug!("Got binary reponse"),
                     Message::Ping(data) => {
                         debug!("Got ping, answering with pong");
                         self.socket.write(Message::Pong(data))?;
