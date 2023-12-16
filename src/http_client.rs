@@ -7,7 +7,7 @@ use url::Url;
 #[derive(Clone)]
 pub enum Method {
     Get,
-    Put,
+    Post,
     AuthGet,
     AuthPut,
 }
@@ -52,8 +52,8 @@ impl HttpClient {
             Method::Get => {
                 request_method = reqwest::Method::GET;
             }
-            Method::Put => {
-                request_method = reqwest::Method::PUT;
+            Method::Post => {
+                request_method = reqwest::Method::POST;
             }
             Method::AuthGet => {
                 request_method = reqwest::Method::GET;
@@ -83,6 +83,8 @@ impl HttpClient {
                             warn!("Rate limited, retrying in {} seconds", duration.as_secs());
                             tokio::time::sleep(duration).await;
                         }
+                    } else {
+                        return Err(Error::msg(e.to_string()))
                     }
                 }
                 Ok(res) => return Ok(res),

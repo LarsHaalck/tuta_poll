@@ -46,7 +46,7 @@ pub async fn fetch(
     let url = url::Url::parse(super::BASE_URL)?.join("/rest/sys/sessionservice")?;
 
     let session = client
-        .send(Method::Put, url, Some(payload))
+        .send(Method::Post, url, Some(payload))
         .await?
         .json::<Session>()
         .await?;
