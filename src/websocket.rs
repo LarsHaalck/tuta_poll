@@ -1,29 +1,21 @@
-use crate::api;
-use crate::types::{EntityUpdate, Mail, OperationType, ReadStatus};
+use crate::http_client::HttpClient;
+use crate::types::{EntityUpdate, OperationType};
 use anyhow::{bail, Error, Result};
 use std::net::TcpStream;
 use tracing::debug;
 use tungstenite::Message;
 use tungstenite::{protocol::WebSocket as TWebSocket, stream::MaybeTlsStream};
 
-pub struct WebSocketConnector<'a> {
+pub struct WebSocketConnector {
     url: url::Url,
-    access_token: &'a str,
-    inboxes: &'a Vec<String>,
 }
 
-pub struct WebSocket<'a> {
+pub struct WebSocket {
     socket: TWebSocket<MaybeTlsStream<TcpStream>>,
-    access_token: &'a str,
-    inboxes: &'a Vec<String>,
 }
 
-impl WebSocketConnector<'_> {
-    pub fn from_url<'a>(
-        access_token: &'a str,
-        user_id: &str,
-        inboxes: &'a Vec<String>,
-    ) -> Result<WebSocketConnector<'a>> {
+impl WebSocketConnector {
+    pub fn from_url(client: &HttpClient, user_id: &str) -> Result<WebSocketConnector> {
         let mut url = url::Url::parse(crate::api::BASE_URL)?.join("event")?;
         url.set_scheme("wss")
             .map_err(|e| Error::msg(format!("Could not set scheme to wss with error {:?}", e)))?;
@@ -31,12 +23,13 @@ impl WebSocketConnector<'_> {
             .append_pair("modelVersions", &crate::api::MODEL_VERSION)
             .append_pair("clientVersion", &crate::api::CLIENT_VERSION)
             .append_pair("userId", user_id)
-            .append_pair("accessToken", access_token);
-        Ok(WebSocketConnector {
-            url,
-            access_token: &access_token,
-            inboxes: &inboxes,
-        })
+            .append_pair(
+                "accessToken",
+                &client
+                    .get_access_token()
+                    .ok_or(Error::msg("Client must be authenticated first"))?,
+            );
+        Ok(WebSocketConnector { url })
     }
 
     pub fn connect(&self) -> Result<WebSocket> {
@@ -48,16 +41,12 @@ impl WebSocketConnector<'_> {
             debug!("* {}", header);
         }
 
-        Ok(WebSocket {
-            socket,
-            access_token: &self.access_token,
-            inboxes: &self.inboxes,
-        })
+        Ok(WebSocket { socket })
     }
 }
 
-impl WebSocket<'_> {
-    pub async fn read_create(&mut self) -> Result<Vec<Mail>> {
+impl WebSocket {
+    pub async fn has_new(&mut self) -> Result<bool> {
         let update = self.read_all()?;
         let events: Vec<_> = update
             .event_batch
@@ -67,19 +56,9 @@ impl WebSocket<'_> {
             .collect();
 
         if events.is_empty() {
-            Ok(Vec::new())
+            Ok(false)
         } else {
-            let mut mails = Vec::new();
-            for inbox in self.inboxes {
-                mails.extend(
-                    api::mail::fetch_from_inbox(&self.access_token, &inbox)
-                        .await?
-                        .into_iter()
-                        .filter(|m| m.read_status == ReadStatus::Unread)
-                        .collect::<Vec<Mail>>(),
-                );
-            }
-            Ok(mails)
+            Ok(true)
         }
     }
     fn read_all(&mut self) -> Result<EntityUpdate> {

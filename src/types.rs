@@ -212,7 +212,6 @@ pub enum ReadStatus {
     Unread = 1,
 }
 
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Permission {

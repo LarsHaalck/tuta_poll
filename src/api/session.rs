@@ -1,3 +1,4 @@
+use crate::http_client::{HttpClient, Method};
 use crate::serialize::*;
 use crate::types::Session;
 use anyhow::Result;
@@ -20,7 +21,11 @@ struct Request<'a> {
     user: (),
 }
 
-pub async fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Session> {
+pub async fn fetch(
+    client: &HttpClient,
+    email_address: &str,
+    user_passphrase_key: &[u8],
+) -> Result<Session> {
     debug!("Fetching session");
 
     let mut hasher = sha2::Sha256::new();
@@ -40,13 +45,9 @@ pub async fn fetch(email_address: &str, user_passphrase_key: &[u8]) -> Result<Se
 
     let url = url::Url::parse(super::BASE_URL)?.join("/rest/sys/sessionservice")?;
 
-    let client = reqwest::Client::new();
     let session = client
-        .post(url)
-        .body(payload)
-        .send()
+        .send(Method::Put, url, Some(payload))
         .await?
-        .error_for_status()?
         .json::<Session>()
         .await?;
     debug!("Fetched session");

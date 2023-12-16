@@ -4,7 +4,7 @@ use crate::api::{
     bucket_permission, group, mail, mailbody, mailbox, mailboxgrouproot, mailfolder, permission,
     salt, session, user,
 };
-use crate::crypto;
+use crate::{crypto, http_client::HttpClient};
 use anyhow::{bail, Error, Result};
 use lz4_flex::decompress_into;
 use tracing::debug;
@@ -14,12 +14,12 @@ use types::{
 };
 use websocket::WebSocketConnector;
 
-use async_stream::{stream, try_stream};
+use async_stream::try_stream;
 use futures_core::stream::Stream;
 
 pub struct Client {
     config: config::Account,
-    access_token: String,
+    client: HttpClient,
     inboxes: Vec<String>,
     user: User,
 }
@@ -33,19 +33,19 @@ pub struct MailContent {
 }
 
 struct SessionData {
+    client: HttpClient,
     user_passphrase_key: Aes128Key,
-    access_token: String,
     user_id: Id,
 }
 
 impl Client {
     pub async fn new(config: &config::Account) -> Result<Client> {
         let SessionData {
+            client,
             user_passphrase_key,
-            access_token,
             user_id,
         } = Self::create_session(config).await?;
-        let mut user = user::fetch(&access_token, &user_id).await?;
+        let mut user = user::fetch(&client, &user_id).await?;
         user.unlock_group_keys(&user_passphrase_key);
         // let user_group_info = group_info::fetch(&access_token, &user.user_group.group_info)?;
         let mail_member = user
@@ -54,13 +54,9 @@ impl Client {
             .find(|membership| membership.group_type == GroupType::Mail)
             .ok_or(Error::msg("Could not find group with type mail"))?;
 
-        // i have never seen a GroupType::Mail with empty sym_enc_g_key
-        // let mail_group_key =
-        //     crypto::decrypt_key(&user_group_key, &mail_member.sym_enc_g_key.unwrap());
-        let root = mailboxgrouproot::fetch(&access_token, &mail_member.group).await?;
-
-        let mailbox = mailbox::fetch(&access_token, &root).await?;
-        let folders = mailfolder::fetch(&access_token, &mailbox).await?;
+        let root = mailboxgrouproot::fetch(&client, &mail_member.group).await?;
+        let mailbox = mailbox::fetch(&client, &root).await?;
+        let folders = mailfolder::fetch(&client, &mailbox).await?;
 
         let inboxes: Vec<_> = folders
             .into_iter()
@@ -70,20 +66,21 @@ impl Client {
 
         Ok(Client {
             config: config.clone(),
-            access_token,
+            client,
             inboxes,
             user,
         })
     }
 
     async fn create_session(config: &config::Account) -> Result<SessionData> {
-        let salt = salt::fetch(&config.email_address).await?;
+        let mut client = HttpClient::new();
+        let salt = salt::fetch(&client, &config.email_address).await?;
         let user_passphrase_key = crypto::create_user_passphrase_key(&config.password, &salt);
-        let session = session::fetch(&config.email_address, &user_passphrase_key).await?;
-        let access_token = session.access_token;
+        let session = session::fetch(&client, &config.email_address, &user_passphrase_key).await?;
+        client.set_access_token(session.access_token);
         Ok(SessionData {
+            client,
             user_passphrase_key,
-            access_token,
             user_id: session.user,
         })
     }
@@ -92,7 +89,7 @@ impl Client {
         try_stream! {
             for inbox in &self.inboxes {
                 let mut start = None;
-                let curr_mails = mail::fetch_from_inbox(&self.access_token, &inbox, start).await?;
+                let curr_mails = mail::fetch_from_inbox(&self.client, &inbox, start).await?;
                 let mut n = curr_mails.len();
                 let mut last = curr_mails.last().map_or("".into(), |m| m.id.1.clone());
 
@@ -102,7 +99,7 @@ impl Client {
 
                 while n > 0 {
                     start = Some(last);
-                    let curr_mails = mail::fetch_from_inbox(&self.access_token, &inbox, start).await?;
+                    let curr_mails = mail::fetch_from_inbox(&self.client, &inbox, start).await?;
                     last = curr_mails.last().map_or("".into(), |m| m.id.1.clone());
                     n = curr_mails.len();
                     for mail in curr_mails {
@@ -167,8 +164,7 @@ impl Client {
             .clone()
             .ok_or(Error::msg("Bucket is null"))?
             .bucket_permissions;
-        let bucket_permissions =
-            bucket_permission::fetch(&self.access_token, &bucket_perm_id).await?;
+        let bucket_permissions = bucket_permission::fetch(&self.client, &bucket_perm_id).await?;
         let bucket_permission = bucket_permissions
             .iter()
             .find(|p| {
@@ -275,7 +271,7 @@ impl Client {
         pub_enc_bucket_key: &Base64,
     ) -> Result<Aes128Key> {
         debug!("decrypt bucket key with key pair of group");
-        let group = group::fetch(&self.access_token, &key_pair).await?;
+        let group = group::fetch(&self.client, &key_pair).await?;
         let key_pair = &group.keys[0];
         let priv_key = crypto::decrypt_rsa_key(
             &self.user.get_group_key(&group.id).unwrap(),
@@ -292,7 +288,7 @@ impl Client {
         if mail.owner_enc_session_key.is_some() && self.user.has_group(&mail.owner_group) {
             self.resolve_session_key_owner(mail)
         } else {
-            let perms = permission::fetch(&self.access_token, &mail.permissions).await?;
+            let perms = permission::fetch(&self.client, &mail.permissions).await?;
             Ok(self
                 .try_symmetric_permission(&perms)
                 .unwrap_or(self.resolve_session_key_public_external(&perms).await?))
@@ -327,7 +323,7 @@ impl Client {
         let address = mail.sender.address.to_string();
 
         let body = if self.config.show_body {
-            let mailbody = mailbody::fetch(&self.access_token, &mail.body).await?;
+            let mailbody = mailbody::fetch(&self.client, &mail.body).await?;
             let compressed_text = crypto::aes_decrypt(&session_key, &mailbody)?;
             let mut buf: Vec<u8> = vec![0; mailbody.len() * 6];
             let size = decompress_into(&compressed_text, &mut buf)?;
@@ -355,11 +351,11 @@ impl Client {
         }
 
         mail.read_status = ReadStatus::Read;
-        mail::update(&self.access_token, &mail, false).await?;
+        mail::update(&self.client, &mail, false).await?;
         Ok(())
     }
 
     pub fn get_websocket_connector(&self) -> Result<WebSocketConnector> {
-        WebSocketConnector::from_url(&self.access_token, &self.user.id, &self.inboxes)
+        WebSocketConnector::from_url(&self.client, &self.user.id)
     }
 }

@@ -1,3 +1,4 @@
+use crate::http_client::{HttpClient, Method};
 use crate::serialize::*;
 use anyhow::Result;
 use serde::Deserialize;
@@ -15,15 +16,14 @@ struct Folders {
     folders: String,
 }
 
-pub async fn fetch(access_token: &str, mailbox: &str) -> Result<String> {
+pub async fn fetch(client: &HttpClient, mailbox: &str) -> Result<String> {
     debug!("Fetching mailbox");
     let url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mailbox/{}", mailbox).as_str())?;
 
-    let folders = crate::request::auth_get(url, access_token)
-        .send()
+    let folders = client
+        .send(Method::AuthGet, url, None)
         .await?
-        .error_for_status()?
         .json::<Response>()
         .await?
         .folders

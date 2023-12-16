@@ -1,17 +1,17 @@
+use crate::http_client::{HttpClient, Method};
 use crate::types::User;
 use anyhow::Result;
 use tracing::{debug, trace};
 
-pub async fn fetch(access_token: &str, user: &str) -> Result<User> {
+pub async fn fetch(client: &HttpClient, user: &str) -> Result<User> {
     debug!("Fetching user");
 
     let url =
         url::Url::parse(super::BASE_URL)?.join(format!("/rest/sys/user/{}", user).as_str())?;
 
-    let user = crate::request::auth_get(url, access_token)
-        .send()
+    let user = client
+        .send(Method::AuthGet, url, None)
         .await?
-        .error_for_status()?
         .json::<User>()
         .await?;
 

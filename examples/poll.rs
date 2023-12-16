@@ -1,12 +1,10 @@
 use anyhow::Result;
-use tracing::info;
-use tuta_poll::client::Client;
-use tuta_poll::*;
-use tuta_poll::types::ReadStatus;
-
 use futures_util::pin_mut;
 use futures_util::StreamExt;
-
+use tracing::info;
+use tuta_poll::client::Client;
+use tuta_poll::types::ReadStatus;
+use tuta_poll::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {

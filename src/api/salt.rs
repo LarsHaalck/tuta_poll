@@ -1,3 +1,4 @@
+use crate::http_client::{HttpClient, Method};
 use crate::serialize::*;
 use crate::types::Aes128Key;
 use anyhow::{Context, Result};
@@ -12,7 +13,7 @@ struct Response {
     salt: Aes128Key,
 }
 
-pub async fn fetch(email_address: &str) -> Result<Aes128Key> {
+pub async fn fetch(client: &HttpClient, email_address: &str) -> Result<Aes128Key> {
     debug!("Fetching salt");
 
     let payload = format!(
@@ -27,9 +28,9 @@ pub async fn fetch(email_address: &str) -> Result<Aes128Key> {
     let mut url = url::Url::parse(super::BASE_URL)?.join("/rest/sys/saltservice")?;
     url.set_query(Some(&payload));
 
-    let response = reqwest::get(url)
+    let response = client
+        .send(Method::Get, url, None)
         .await?
-        .error_for_status()?
         .json::<Response>()
         .await?;
 

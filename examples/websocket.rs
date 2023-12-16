@@ -1,6 +1,9 @@
 use anyhow::Result;
+use futures_util::pin_mut;
+use futures_util::StreamExt;
 use tracing::{info, warn};
 use tuta_poll::client::Client;
+use tuta_poll::types::ReadStatus;
 use tuta_poll::*;
 
 #[tokio::main]
@@ -31,12 +34,20 @@ async fn main() -> Result<()> {
         info!("Connecting to websocket");
         let mut socket = connector.connect()?;
 
-        while let Ok(mut mails) = socket.read_create().await {
-            info!("Got batch of {} mails", mails.len());
-            for mail in &mut mails {
+        while let Ok(has_new) = socket.has_new().await {
+            if !has_new {
+                continue;
+            }
+            let mails = client.get_mails();
+            pin_mut!(mails);
+            while let Some(mail) = mails.next().await {
+                let mut mail = mail?;
+                if mail.read_status == ReadStatus::Read {
+                    continue;
+                }
                 let decrypted_mail = client.decrypt(&mail).await;
                 info!("Got mail: {:?}", decrypted_mail);
-                client.mark_read(mail).await?;
+                client.mark_read(&mut mail).await?;
             }
         }
         warn!("Error getting mails. Retrying in 10s");

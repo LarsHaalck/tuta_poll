@@ -4,6 +4,6 @@ pub mod config;
 pub mod crypto;
 pub mod types;
 
-mod request;
+mod http_client;
 mod serialize;
 mod websocket;
