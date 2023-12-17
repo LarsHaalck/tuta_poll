@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
         }
         let decrypted_mail = client.decrypt(&mail).await;
         info!("Got mail: {:?}", decrypted_mail);
-        client.mark_read(&mut mail).await?;
+        client.set_read_status(&mut mail, ReadStatus::Read).await?;
     }
     Ok(())
 }

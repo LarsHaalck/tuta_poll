@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{bail, Context, Result};
 use reqwest::{header::HeaderMap, Client, Response, StatusCode};
 use std::time::Duration;
 use tracing::warn;
@@ -39,7 +39,7 @@ impl HttpClient {
             "accessToken",
             self.access_token
                 .clone()
-                .ok_or(Error::msg("Client needs to be authenticated first"))?
+                .context("Client needs to be authenticated first")?
                 .parse()?,
         );
         Ok(request_headers)
@@ -84,7 +84,7 @@ impl HttpClient {
                             tokio::time::sleep(duration).await;
                         }
                     } else {
-                        return Err(Error::msg(e.to_string()))
+                        bail!(e.to_string());
                     }
                 }
                 Ok(res) => return Ok(res),

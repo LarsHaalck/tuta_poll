@@ -1,7 +1,7 @@
 use crate::types::Aes128Key;
 use aes::cipher::block_padding::Pkcs7;
 use aes::cipher::{BlockDecryptMut, KeyIvInit};
-use anyhow::{bail, Error, Result};
+use anyhow::{bail, Result};
 use hmac::{Hmac, Mac};
 use num_traits::cast::FromPrimitive;
 use rsa::RsaPrivateKey;
@@ -85,7 +85,7 @@ pub fn aes_decrypt(key: &Aes128Key, message: &[u8]) -> Result<Vec<u8>> {
             .verify_slice(&message[message.len() - MAC_SIZE..])
             .is_err()
         {
-            return Err(Error::msg("message could not be verified"));
+            bail!("message could not be verified");
         }
     } else {
         message_without_mac = &message;

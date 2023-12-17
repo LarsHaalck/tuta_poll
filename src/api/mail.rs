@@ -50,14 +50,14 @@ pub async fn fetch_from_id(
     Ok(mail)
 }
 
-pub async fn update(client: &HttpClient, mail: &Mail, update_key: bool) -> Result<()> {
-    let mut url = url::Url::parse(super::BASE_URL)?
+pub async fn update(client: &HttpClient, mail: &Mail) -> Result<()> {
+    let url = url::Url::parse(super::BASE_URL)?
         .join(format!("/rest/tutanota/mail/{}/{}", mail.id.0, mail.id.1).as_str())?;
 
-    if update_key {
-        url.query_pairs_mut()
-            .append_pair("updateOwnerEncSessionKey", "true");
-    }
+    // if update_key {
+    //     url.query_pairs_mut()
+    //         .append_pair("updateOwnerEncSessionKey", "true");
+    // }
 
     let payload = serde_json::to_string(&mail)?;
     client.send(Method::AuthPut, url, Some(payload)).await?;

@@ -5,7 +5,7 @@ use crate::api::{
     salt, session, user,
 };
 use crate::{crypto, http_client::HttpClient};
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use lz4_flex::decompress_into;
 use tracing::debug;
 use types::{
@@ -52,7 +52,7 @@ impl Client {
             .memberships
             .iter()
             .find(|membership| membership.group_type == GroupType::Mail)
-            .ok_or(Error::msg("Could not find group with type mail"))?;
+            .context("Could not find group with type mail")?;
 
         let root = mailboxgrouproot::fetch(&client, &mail_member.group).await?;
         let mailbox = mailbox::fetch(&client, &root).await?;
@@ -115,11 +115,11 @@ impl Client {
         let gk = self
             .user
             .get_group_key(&mail.owner_group)
-            .ok_or(Error::msg("No group key for mail"))?;
+            .context("No group key for mail")?;
 
         let key = mail
             .owner_enc_session_key
-            .ok_or(Error::msg("No owner enc session key for mail"))?;
+            .context("No owner enc session key for mail")?;
         return Ok(crypto::decrypt_key(&gk, &key));
     }
 
@@ -157,12 +157,12 @@ impl Client {
                 p.permission_type == PermissionType::Public
                     || p.permission_type == PermissionType::External
             })
-            .ok_or(Error::msg("could not find public or external permission"))?;
+            .context("could not find public or external permission")?;
 
         let bucket_perm_id = &pub_or_external_perm
             .bucket
             .clone()
-            .ok_or(Error::msg("Bucket is null"))?
+            .context("Bucket is null")?
             .bucket_permissions;
         let bucket_permissions = bucket_permission::fetch(&self.client, &bucket_perm_id).await?;
         let bucket_permission = bucket_permissions
@@ -171,7 +171,7 @@ impl Client {
                 p.permission_type == BucketPermissionType::Public
                     || p.permission_type == BucketPermissionType::External
             })
-            .ok_or(Error::msg("could not find public or external permission"))?;
+            .context("could not find public or external permission")?;
 
         match bucket_permission.permission_type {
             BucketPermissionType::External => {
@@ -207,7 +207,7 @@ impl Client {
 
         let msg = perm
             .bucket_enc_session_key
-            .ok_or(Error::msg("bucket enc session key not defined"))?;
+            .context("bucket enc session key not defined")?;
         Ok(crypto::decrypt_key(&bucket_key, &msg))
     }
 
@@ -220,11 +220,11 @@ impl Client {
         let pub_enc_bucket_key = bucket_perm
             .pub_enc_bucket_key
             .clone()
-            .ok_or(Error::msg("PubEncBucketKey is not defined"))?;
+            .context("PubEncBucketKey is not defined")?;
 
         let bucket_enc_session_key = perm
             .bucket_enc_session_key
-            .ok_or(Error::msg("BucktEncSessionKey is not defined"))?;
+            .context("BucktEncSessionKey is not defined")?;
 
         let bucket_key = self
             .decrypt_bucket_key_key_pair_group(&bucket_perm.group, &pub_enc_bucket_key)
@@ -280,7 +280,7 @@ impl Client {
 
         crypto::rsa_decrypt(&priv_key, pub_enc_bucket_key)?
             .try_into()
-            .map_err(|_| Error::msg("Could not convert to [u8; 16]"))
+            .map_err(|_| anyhow!("Could not convert to [u8; 16]"))
     }
 
     async fn resolve_session_key(&self, mail: &Mail) -> Result<Aes128Key> {
@@ -345,13 +345,13 @@ impl Client {
         })
     }
 
-    pub async fn mark_read(&self, mail: &mut Mail) -> Result<()> {
-        if mail.read_status == ReadStatus::Read {
+    pub async fn set_read_status(&self, mail: &mut Mail, read_status: ReadStatus) -> Result<()> {
+        if mail.read_status == read_status {
             return Ok(());
         }
 
-        mail.read_status = ReadStatus::Read;
-        mail::update(&self.client, &mail, false).await?;
+        mail.read_status = read_status;
+        mail::update(&self.client, &mail).await?;
         Ok(())
     }
 

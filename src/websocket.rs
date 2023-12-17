@@ -1,6 +1,6 @@
 use crate::http_client::HttpClient;
 use crate::types::{EntityUpdate, OperationType};
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::net::TcpStream;
 use tracing::debug;
 use tungstenite::Message;
@@ -18,7 +18,7 @@ impl WebSocketConnector {
     pub fn from_url(client: &HttpClient, user_id: &str) -> Result<WebSocketConnector> {
         let mut url = url::Url::parse(crate::api::BASE_URL)?.join("event")?;
         url.set_scheme("wss")
-            .map_err(|e| Error::msg(format!("Could not set scheme to wss with error {:?}", e)))?;
+            .map_err(|e| anyhow!("Could not set scheme to wss with error {:?}", e))?;
         url.query_pairs_mut()
             .append_pair("modelVersions", &crate::api::MODEL_VERSION)
             .append_pair("clientVersion", &crate::api::CLIENT_VERSION)
@@ -27,7 +27,7 @@ impl WebSocketConnector {
                 "accessToken",
                 &client
                     .get_access_token()
-                    .ok_or(Error::msg("Client must be authenticated first"))?,
+                    .context("Client must be authenticated first")?,
             );
         Ok(WebSocketConnector { url })
     }
