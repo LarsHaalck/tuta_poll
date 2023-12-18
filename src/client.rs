@@ -60,7 +60,10 @@ impl Client {
 
         let inboxes: Vec<_> = folders
             .into_iter()
-            .filter(|folder| folder.folder_type == MailFolderType::Inbox)
+            .filter(|folder| {
+                folder.folder_type == MailFolderType::Inbox
+                    || (config.watch_spam && folder.folder_type == MailFolderType::Spam)
+            })
             .map(|folder| folder.mails)
             .collect();
 
