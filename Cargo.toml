@@ -1,9 +1,13 @@
 [package]
 name = "tuta_poll"
 version = "0.1.0"
-description = "tuta poll library to fetch new mails and possibly relay them"
 edition = "2021"
+authors = ["Lars Haalck <crates@larshaalck.de>"]
+description = "tuta library to fetch new mails, decrypt them, and mark them as read"
 repository = "https://github.com/LarsHaalck/tuta_poll"
+categories = ["api-bindings"]
+keywords = ["tuta", "tutanota", "notifications"]
+license = "GPL-3.0-only"
 
 [dependencies]
 aes = "0.8.3"
